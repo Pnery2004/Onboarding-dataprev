@@ -1,0 +1,207 @@
+{
+  "info": {
+    "name": "API Gestão de Beneficiários",
+    "description": "Testes para API de Gerenciamento de Beneficiários",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Beneficiários",
+      "item": [
+        {
+          "name": "1. Listar todos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/beneficiarios",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "v1",
+                "beneficiarios"
+              ]
+            },
+            "description": "Retorna lista de todos os beneficiários cadastrados"
+          }
+        },
+        {
+          "name": "2. Obter por ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/beneficiarios/1",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "v1",
+                "beneficiarios",
+                "1"
+              ]
+            },
+            "description": "Busca um beneficiário específico pelo ID"
+          }
+        },
+        {
+          "name": "3. Obter por CPF",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/beneficiarios/cpf/12345678901",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "v1",
+                "beneficiarios",
+                "cpf",
+                "12345678901"
+              ]
+            },
+            "description": "Busca um beneficiário específico pelo CPF (11 dígitos)"
+          }
+        },
+        {
+          "name": "4. Criar novo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Pedro Mendes Silva\",\n  \"cpf\": \"33344455566\",\n  \"dataNascimento\": \"1988-12-01\",\n  \"situacao\": \"ATIVO\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/v1/beneficiarios",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "v1",
+                "beneficiarios"
+              ]
+            },
+            "description": "Cria um novo beneficiário no sistema"
+          }
+        },
+        {
+          "name": "5. Atualizar beneficiário",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"João Silva Santos - ATUALIZADO\",\n  \"cpf\": \"12345678901\",\n  \"dataNascimento\": \"1990-05-15\",\n  \"situacao\": \"INATIVO\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/v1/beneficiarios/1",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "v1",
+                "beneficiarios",
+                "1"
+              ]
+            },
+            "description": "Atualiza um beneficiário existente pelo ID"
+          }
+        },
+        {
+          "name": "6. Deletar beneficiário",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/v1/beneficiarios/2",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "v1",
+                "beneficiarios",
+                "2"
+              ]
+            },
+            "description": "Deleta um beneficiário do sistema pelo ID"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Swagger",
+      "item": [
+        {
+          "name": "Documentação Swagger",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/swagger-ui.html",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "swagger-ui.html"
+              ]
+            },
+            "description": "Acessa a documentação interativa Swagger/OpenAPI"
+          }
+        },
+        {
+          "name": "OpenAPI JSON",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api-docs",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api-docs"
+              ]
+            },
+            "description": "Retorna o arquivo JSON OpenAPI"
+          }
+        }
+      ]
+    }
+  ]
+}
+
