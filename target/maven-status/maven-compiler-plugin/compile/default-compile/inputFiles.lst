@@ -1,0 +1,8 @@
+/mnt/c/Users/paulo.lobo/Downloads/Gestão-Beneficiários/src/main/java/com/example/Gestao_Beneficiarios/GestaoBeneficiariosApplication.java
+/mnt/c/Users/paulo.lobo/Downloads/Gestão-Beneficiários/src/main/java/com/example/Gestao_Beneficiarios/config/OpenApiConfig.java
+/mnt/c/Users/paulo.lobo/Downloads/Gestão-Beneficiários/src/main/java/com/example/Gestao_Beneficiarios/controller/BeneficiarioController.java
+/mnt/c/Users/paulo.lobo/Downloads/Gestão-Beneficiários/src/main/java/com/example/Gestao_Beneficiarios/dto/BeneficiarioDTO.java
+/mnt/c/Users/paulo.lobo/Downloads/Gestão-Beneficiários/src/main/java/com/example/Gestao_Beneficiarios/exception/GlobalExceptionHandler.java
+/mnt/c/Users/paulo.lobo/Downloads/Gestão-Beneficiários/src/main/java/com/example/Gestao_Beneficiarios/model/Beneficiario.java
+/mnt/c/Users/paulo.lobo/Downloads/Gestão-Beneficiários/src/main/java/com/example/Gestao_Beneficiarios/repository/BeneficiarioRepository.java
+/mnt/c/Users/paulo.lobo/Downloads/Gestão-Beneficiários/src/main/java/com/example/Gestao_Beneficiarios/service/BeneficiarioService.java
