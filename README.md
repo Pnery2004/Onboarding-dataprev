@@ -1,6 +1,6 @@
 # API de Gestão de Beneficiários
 
-API REST para gerenciamento de beneficiários da Dataprev, desenvolvida com Spring Boot 4.0.3, JPA/Hibernate e PostgreSQL.
+API REST para gerenciamento de beneficiários da Dataprev, desenvolvida com Spring Boot 4.0.3, JPA/Hibernate e PostgreSQL, com frontend React integrado ao Design System GOV.BR.
 
 ## 📋 Características
 
@@ -11,36 +11,59 @@ API REST para gerenciamento de beneficiários da Dataprev, desenvolvida com Spri
 - ✅ **Tratamento de exceções global**
 - ✅ **Validação de dados com Jakarta Validation**
 - ✅ **Auditoria com datas de criação/atualização**
+- ✅ **Frontend React com Design System GOV.BR**
 
 ## 🛠️ Tecnologias
 
+### Backend
 - **Java 17**
 - **Spring Boot 4.0.3**
-- **Spring Data JPA**
-- **PostgreSQL 16**
-- **Swagger/OpenAPI 3.0**
+- **Spring Data JPA / Hibernate**
+- **Spring Validation (Jakarta Bean Validation)**
+- **Spring AI 2.0.0-M2** (integração PostgresML Embedding)
+- **PostgreSQL 13+** (driver JDBC)
+- **Springdoc OpenAPI 2.1.0** (Swagger UI)
 - **Lombok**
-- **Maven**
+- **Maven 3.8+** (via Maven Wrapper)
+
+### Frontend
+- **React 19**
+- **React Router DOM 7**
+- **Axios 1.x** — cliente HTTP para comunicação com a API
+- **Design System GOV.BR** (`@govbr-ds/core ^3.7.0` + `@govbr-ds/webcomponents`)
+- **CSS3** — Flexbox e Grid
+- **Node.js 18+**
 
 ## 📦 Instalação
 
 ### Pré-requisitos
 
 - Java 17 ou superior
+- Node.js 18 ou superior
 - PostgreSQL 13 ou superior
-- Maven 3.8 ou superior
 - Git
 
-### Clonando o repositório
+### 1. Clonar o repositório
 
 ```bash
 git clone https://github.com/seu-usuario/Gestao-Beneficiarios.git
 cd Gestao-Beneficiarios
 ```
 
-### Configurando o banco de dados
+### 2. Baixar todas as dependências (Backend + Frontend)
 
-#### 1. Criar o usuário e banco de dados no PostgreSQL
+Execute o script de instalação na raiz do projeto:
+
+```bash
+./install.sh
+```
+
+O script irá:
+- Verificar Java, Node.js e npm instalados
+- Baixar todas as dependências Maven do backend (`dependency:go-offline`)
+- Instalar todos os pacotes npm do frontend (`npm install`)
+
+### 3. Configurar o banco de dados PostgreSQL
 
 ```bash
 sudo -u postgres psql << EOF
@@ -52,244 +75,86 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO myuser;
 EOF
 ```
 
-#### 2. Importar o script SQL (opcional)
+#### Importar script SQL inicial (opcional)
 
 ```bash
-PGPASSWORD='secret' psql -h localhost -U myuser -d mydatabase < init-db.sql
+PGPASSWORD='secret' psql -h localhost -U myuser -d mydatabase < backend/init-db.sql
 ```
 
-#### 3. Criar arquivo `.pgpass` para conectar sem senha
+#### Criar arquivo `.pgpass` para conectar sem senha
 
 ```bash
 echo "localhost:5432:mydatabase:myuser:secret" > ~/.pgpass
 chmod 600 ~/.pgpass
 ```
 
-### Compilando o projeto
-
-```bash
-cd /caminho/para/Gestao-Beneficiarios
-./mvnw clean install
-```
-
 ## 🚀 Executando a aplicação
 
-### Usando Maven
+### Iniciar tudo de uma vez
 
 ```bash
+./start.sh
+```
+
+### Iniciar manualmente
+
+**Backend:**
+```bash
+cd backend
 ./mvnw spring-boot:run
 ```
 
-### Usando JAR
-
+**Frontend:**
 ```bash
-./mvnw clean package
-java -jar target/Gestao-Beneficiarios-0.0.1-SNAPSHOT.jar
+cd frontend/gestao-beneficiarios-frontend
+npm start
 ```
 
-A aplicação estará disponível em: `http://localhost:8080`
-
-## 📚 Documentação da API
-
-### Swagger UI
-
-Após iniciar a aplicação, acesse a documentação interativa:
-
-```
-http://localhost:8080/swagger-ui.html
-```
-
-### OpenAPI JSON
-
-```
-http://localhost:8080/api-docs
-```
-
-## 📝 Endpoints da API
-
-### Base URL
-```
-http://localhost:8080/api/v1/beneficiarios
-```
-
-### 1. Listar todos os beneficiários
-
-**GET** `/api/v1/beneficiarios`
-
-```bash
-curl -X GET http://localhost:8080/api/v1/beneficiarios
-```
-
-**Resposta (200 OK):**
-```json
-[
-  {
-    "id": 1,
-    "nome": "João Silva Santos",
-    "cpf": "12345678901",
-    "dataNascimento": "1990-05-15",
-    "situacao": "ATIVO",
-    "dataCriacao": "2026-03-10",
-    "dataAtualizacao": "2026-03-10"
-  }
-]
-```
-
-### 2. Obter beneficiário por ID
-
-**GET** `/api/v1/beneficiarios/{id}`
-
-```bash
-curl -X GET http://localhost:8080/api/v1/beneficiarios/1
-```
-
-**Resposta (200 OK):**
-```json
-{
-  "id": 1,
-  "nome": "João Silva Santos",
-  "cpf": "12345678901",
-  "dataNascimento": "1990-05-15",
-  "situacao": "ATIVO",
-  "dataCriacao": "2026-03-10",
-  "dataAtualizacao": "2026-03-10"
-}
-```
-
-### 3. Obter beneficiário por CPF
-
-**GET** `/api/v1/beneficiarios/cpf/{cpf}`
-
-```bash
-curl -X GET http://localhost:8080/api/v1/beneficiarios/cpf/12345678901
-```
-
-**Resposta (200 OK):**
-```json
-{
-  "id": 1,
-  "nome": "João Silva Santos",
-  "cpf": "12345678901",
-  "dataNascimento": "1990-05-15",
-  "situacao": "ATIVO",
-  "dataCriacao": "2026-03-10",
-  "dataAtualizacao": "2026-03-10"
-}
-```
-
-### 4. Criar novo beneficiário
-
-**POST** `/api/v1/beneficiarios`
-
-```bash
-curl -X POST http://localhost:8080/api/v1/beneficiarios \
-  -H "Content-Type: application/json" \
-  -d '{
-    "nome": "Ana Paula Silva",
-    "cpf": "11122233344",
-    "dataNascimento": "1995-07-20",
-    "situacao": "ATIVO"
-  }'
-```
-
-**Resposta (201 Created):**
-```json
-{
-  "id": 4,
-  "nome": "Ana Paula Silva",
-  "cpf": "11122233344",
-  "dataNascimento": "1995-07-20",
-  "situacao": "ATIVO",
-  "dataCriacao": "2026-03-10",
-  "dataAtualizacao": "2026-03-10"
-}
-```
-
-### 5. Atualizar beneficiário
-
-**PUT** `/api/v1/beneficiarios/{id}`
-
-```bash
-curl -X PUT http://localhost:8080/api/v1/beneficiarios/1 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "nome": "João Silva Santos Atualizado",
-    "cpf": "12345678901",
-    "dataNascimento": "1990-05-15",
-    "situacao": "INATIVO"
-  }'
-```
-
-**Resposta (200 OK):**
-```json
-{
-  "id": 1,
-  "nome": "João Silva Santos Atualizado",
-  "cpf": "12345678901",
-  "dataNascimento": "1990-05-15",
-  "situacao": "INATIVO",
-  "dataCriacao": "2026-03-10",
-  "dataAtualizacao": "2026-03-10"
-}
-```
-
-### 6. Deletar beneficiário
-
-**DELETE** `/api/v1/beneficiarios/{id}`
-
-```bash
-curl -X DELETE http://localhost:8080/api/v1/beneficiarios/1
-```
-
-**Resposta (204 No Content):**
-```
-(sem conteúdo)
-```
-
-## ✅ Testes
-
-### Executar todos os testes
-
-```bash
-./mvnw test
-```
-
-### Executar com cobertura
-
-```bash
-./mvnw jacoco:report
-```
+| Serviço   | Endereço                              |
+|-----------|---------------------------------------|
+| Frontend  | http://localhost:3000                 |
+| API       | http://localhost:8080                 |
+| Swagger   | http://localhost:8080/swagger-ui.html |
 
 ## 🗂️ Estrutura do projeto
 
 ```
 Gestao-Beneficiarios/
-├── src/
-│   ├── main/
-│   │   ├── java/com/example/Gestao_Beneficiarios/
-│   │   │   ├── config/           # Configurações (Swagger, etc)
-│   │   │   ├── controller/       # Controllers REST
-│   │   │   ├── dto/              # Data Transfer Objects
-│   │   │   ├── exception/        # Exception handling
-│   │   │   ├── model/            # Entidades JPA
-│   │   │   ├── repository/       # Repositories (DAO)
-│   │   │   ├── service/          # Lógica de negócio
-│   │   │   └── GestaoBeneficiariosApplication.java
-│   │   └── resources/
-│   │       └── application.properties
-│   └── test/
-│       └── java/...
-├── init-db.sql                   # Script de inicialização do BD
-├── pom.xml                       # Dependências Maven
-├── README.md                     # Este arquivo
-└── .gitignore
+├── install.sh                        # Baixa todas as dependências
+├── start.sh                          # Inicia backend + frontend
+├── stop.sh                           # Para todos os serviços
+├── status.sh                         # Verifica status dos serviços
+├── backend/
+│   ├── src/
+│   │   ├── main/
+│   │   │   ├── java/com/example/Gestao_Beneficiarios/
+│   │   │   │   ├── config/           # Configurações (Swagger, CORS)
+│   │   │   │   ├── controller/       # Controllers REST
+│   │   │   │   ├── dto/              # Data Transfer Objects
+│   │   │   │   ├── exception/        # Exception handling global
+│   │   │   │   ├── model/            # Entidades JPA
+│   │   │   │   ├── repository/       # Repositories (DAO)
+│   │   │   │   ├── service/          # Lógica de negócio
+│   │   │   │   └── GestaoBeneficiariosApplication.java
+│   │   │   └── resources/
+│   │   │       └── application.properties
+│   │   └── test/
+│   ├── init-db.sql                   # Script de inicialização do BD
+│   ├── pom.xml                       # Dependências Maven
+│   └── mvnw                          # Maven Wrapper
+└── frontend/
+    └── gestao-beneficiarios-frontend/
+        ├── src/
+        │   ├── components/           # Header, Footer, Loading
+        │   ├── pages/                # Home, Lista, Form, Detalhes
+        │   ├── services/             # api.js, beneficiarioService.js
+        │   └── utils/                # formatters.js
+        └── package.json              # Dependências npm
 ```
 
 ## 🔧 Configuração
 
 ### application.properties
-
-As principais configurações estão em `src/main/resources/application.properties`:
 
 ```properties
 # Banco de dados
@@ -308,13 +173,51 @@ springdoc.swagger-ui.path=/swagger-ui.html
 
 ### Tabela: beneficiarios
 
-| Campo | Tipo | Constraints | Descrição |
-|-------|------|-------------|-----------|
-| id | SERIAL | PRIMARY KEY | Identificador único |
-| nome | VARCHAR(100) | NOT NULL | Nome completo |
-| cpf | VARCHAR(11) | NOT NULL, UNIQUE | CPF (11 dígitos) |
-| data_nascimento | DATE | NOT NULL | Data de nascimento |
-| situacao | VARCHAR(50) | NOT NULL | Status (ATIVO, INATIVO, SUSPENSO) |
-| data_criacao | DATE | DEFAULT CURRENT_DATE | Data de criação |
-| data_atualizacao | DATE | DEFAULT CURRENT_DATE | Data de última atualização |
+| Campo            | Tipo         | Constraints       | Descrição                        |
+|------------------|--------------|-------------------|----------------------------------|
+| id               | SERIAL       | PRIMARY KEY       | Identificador único              |
+| nome             | VARCHAR(100) | NOT NULL          | Nome completo                    |
+| cpf              | VARCHAR(11)  | NOT NULL, UNIQUE  | CPF (11 dígitos, sem formatação) |
+| data_nascimento  | DATE         | NOT NULL          | Data de nascimento               |
+| situacao         | VARCHAR(50)  | NOT NULL          | ATIVO, INATIVO ou SUSPENSO       |
+| data_criacao     | DATE         | DEFAULT NOW()     | Data de criação do registro      |
+| data_atualizacao | DATE         | DEFAULT NOW()     | Data da última atualização       |
 
+## 🎨 Frontend — Interface Web
+
+### Funcionalidades
+
+| Tela                    | Rota                    | Descrição                                                 |
+|-------------------------|-------------------------|-----------------------------------------------------------|
+| Página Inicial          | `/`                     | Cards com acesso rápido às funcionalidades                |
+| Listagem                | `/beneficiarios`        | Tabela com filtro por nome/CPF e por situação             |
+| Cadastro                | `/novo`                 | Formulário com validação de CPF e campos obrigatórios     |
+| Edição                  | `/editar/:id`           | Formulário pré-preenchido (CPF somente leitura)           |
+| Detalhes                | `/beneficiario/:id`     | Visualização completa com badge de situação               |
+
+### Design System GOV.BR
+
+- **Cores oficiais**: Azul `#1351b4`, Azul escuro `#0c326f`
+- **Tipografia**: Fonte Rawline (padrão GOV.BR)
+- **Acessibilidade**: Contraste adequado e navegação por teclado
+- **Responsividade**: Mobile-first design
+
+## 🧪 Testando o Sistema
+
+### Verificar status dos serviços
+
+```bash
+./status.sh
+```
+
+### Endpoints da API
+
+| Método | Endpoint                   | Descrição                         |
+|--------|----------------------------|-----------------------------------|
+| GET    | `/beneficiarios`           | Listar todos os beneficiários     |
+| GET    | `/beneficiarios/{id}`      | Buscar beneficiário por ID        |
+| POST   | `/beneficiarios`           | Cadastrar novo beneficiário       |
+| PUT    | `/beneficiarios/{id}`      | Atualizar beneficiário            |
+| DELETE | `/beneficiarios/{id}`      | Deletar beneficiário              |
+
+Documentação interativa: http://localhost:8080/swagger-ui.html
