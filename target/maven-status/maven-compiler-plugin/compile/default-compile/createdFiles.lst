@@ -1,0 +1,10 @@
+com/example/Gestao_Beneficiarios/controller/BeneficiarioController.class
+com/example/Gestao_Beneficiarios/exception/GlobalExceptionHandler.class
+com/example/Gestao_Beneficiarios/dto/BeneficiarioDTO.class
+com/example/Gestao_Beneficiarios/repository/BeneficiarioRepository.class
+com/example/Gestao_Beneficiarios/dto/BeneficiarioDTO$BeneficiarioDTOBuilder.class
+com/example/Gestao_Beneficiarios/service/BeneficiarioService.class
+com/example/Gestao_Beneficiarios/model/Beneficiario$BeneficiarioBuilder.class
+com/example/Gestao_Beneficiarios/model/Beneficiario.class
+com/example/Gestao_Beneficiarios/config/OpenApiConfig.class
+com/example/Gestao_Beneficiarios/GestaoBeneficiariosApplication.class
