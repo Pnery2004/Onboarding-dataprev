@@ -49,51 +49,6 @@ const Home = () => {
             </Link>
           </div>
 
-          <div className="card">
-            <div className="card-icon">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="16" y1="13" x2="8" y2="13"></line>
-                <line x1="16" y1="17" x2="8" y2="17"></line>
-                <polyline points="10 9 9 9 8 9"></polyline>
-              </svg>
-            </div>
-            <h2 className="card-title">Documentação API</h2>
-            <p className="card-description">
-              Acesse a documentação completa da API REST com Swagger/OpenAPI
-            </p>
-            <a
-              href="http://localhost:8080/swagger-ui.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="br-button primary"
-            >
-              Ver Documentação
-            </a>
-          </div>
-        </div>
-
-        <div className="home-info">
-          <h2>Sobre o Sistema</h2>
-          <div className="info-grid">
-            <div className="info-item">
-              <h3>✅ API REST Completa</h3>
-              <p>Endpoints para todas as operações CRUD (GET, POST, PUT, DELETE)</p>
-            </div>
-            <div className="info-item">
-              <h3>✅ Validações Robustas</h3>
-              <p>Validação de CPF, datas e campos obrigatórios</p>
-            </div>
-            <div className="info-item">
-              <h3>✅ Design System GOV.BR</h3>
-              <p>Interface moderna seguindo padrões do governo federal</p>
-            </div>
-            <div className="info-item">
-              <h3>✅ Persistência Segura</h3>
-              <p>Dados armazenados com segurança em PostgreSQL</p>
-            </div>
-          </div>
         </div>
       </div>
     </div>
