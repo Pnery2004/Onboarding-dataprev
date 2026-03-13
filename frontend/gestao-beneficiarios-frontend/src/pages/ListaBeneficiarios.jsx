@@ -150,21 +150,21 @@ const ListaBeneficiarios = () => {
                           onClick={() => navigate(`/beneficiarios/${beneficiario.id}`)}
                           title="Visualizar"
                         >
-                          👁️
+                          Visualizar
                         </button>
                         <button
                           className="br-button secondary small"
                           onClick={() => navigate(`/editar/${beneficiario.id}`)}
                           title="Editar"
                         >
-                          ✏️
+                          Editar
                         </button>
                         <button
                           className="br-button danger small"
                           onClick={() => handleDeletar(beneficiario.id, beneficiario.nome)}
                           title="Deletar"
                         >
-                          🗑️
+                          Excluir
                         </button>
                       </div>
                     </td>
