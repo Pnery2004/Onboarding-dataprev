@@ -31,7 +31,7 @@ public class BeneficiarioConsultaService {
         try {
             return Optional.ofNullable(beneficiariosClient.buscarPorCpf(cpf));
         } catch (FeignException.NotFound ex) {
-            return Optional.empty();n        }
+            return Optional.empty();
+        }
     }
 }
-

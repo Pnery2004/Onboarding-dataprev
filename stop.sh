@@ -1,4 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+set -euo pipefail
 
 # Script de Parada do Sistema de Gestão de Beneficiários
 # Dataprev - Março 2026
@@ -14,88 +16,81 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Parar Frontend
+stop_service() {
+    local service_name="$1"
+    local pid_file="$2"
+    local port="$3"
+
+    echo "$service_name..."
+
+    # Kill by saved PID (the Maven wrapper subshell)
+    if [ -f "$pid_file" ]; then
+        local pid
+        pid=$(cat "$pid_file")
+        if kill -0 "$pid" 2>/dev/null; then
+            # Also kill all children of this PID (the actual JVM)
+            pkill -P "$pid" 2>/dev/null || true
+            kill "$pid" 2>/dev/null || true
+            echo -e "${GREEN}✅ $service_name parado (PID: $pid)${NC}"
+        else
+            echo -e "${YELLOW}⚠️  $service_name já estava parado${NC}"
+        fi
+        rm -f "$pid_file"
+    fi
+
+    # Kill anything still holding the port (catches orphaned JVM processes)
+    local port_pids
+    port_pids=$(lsof -ti :"$port" 2>/dev/null || true)
+    if [ -n "$port_pids" ]; then
+        echo "$port_pids" | xargs kill 2>/dev/null || true
+        sleep 1
+        # Force kill if still alive
+        port_pids=$(lsof -ti :"$port" 2>/dev/null || true)
+        if [ -n "$port_pids" ]; then
+            echo "$port_pids" | xargs kill -9 2>/dev/null || true
+        fi
+        echo -e "${GREEN}✅ $service_name: porta $port liberada${NC}"
+    elif [ ! -f "$pid_file" ]; then
+        echo -e "${YELLOW}⚠️  $service_name não estava rodando${NC}"
+    fi
+
+    echo ""
+}
+
+cleanup_log() {
+    local label="$1"
+    local log_file="$2"
+
+    if [ -f "$log_file" ]; then
+        rm -f "$log_file"
+        echo -e "${GREEN}✅ Log de $label removido${NC}"
+    fi
+}
+
 echo "1️⃣ Parando Frontend..."
-if [ -f /tmp/frontend.pid ]; then
-    FRONTEND_PID=$(cat /tmp/frontend.pid)
-    if kill -0 $FRONTEND_PID 2>/dev/null; then
-        kill $FRONTEND_PID
-        echo -e "${GREEN}✅ Frontend parado (PID: $FRONTEND_PID)${NC}"
-        rm /tmp/frontend.pid
-    else
-        echo -e "${YELLOW}⚠️  Frontend já estava parado${NC}"
-        rm /tmp/frontend.pid
-    fi
-else
-    # Tentar parar pelo processo
-    FRONTEND_PID=$(lsof -ti :3000)
-    if [ ! -z "$FRONTEND_PID" ]; then
-        kill $FRONTEND_PID
-        echo -e "${GREEN}✅ Frontend parado (PID: $FRONTEND_PID)${NC}"
-    else
-        echo -e "${YELLOW}⚠️  Frontend não está rodando${NC}"
-    fi
-fi
-echo ""
+stop_service "Frontend" "/tmp/frontend.pid" 3000
 
-# Parar Backend
-echo "2️⃣ Parando Backend..."
-if [ -f /tmp/backend.pid ]; then
-    BACKEND_PID=$(cat /tmp/backend.pid)
-    if kill -0 $BACKEND_PID 2>/dev/null; then
-        kill $BACKEND_PID
-        echo -e "${GREEN}✅ Backend parado (PID: $BACKEND_PID)${NC}"
-        rm /tmp/backend.pid
-    else
-        echo -e "${YELLOW}⚠️  Backend já estava parado${NC}"
-        rm /tmp/backend.pid
-    fi
-else
-    # Tentar parar pelo processo
-    BACKEND_PID=$(lsof -ti :8080)
-    if [ ! -z "$BACKEND_PID" ]; then
-        kill $BACKEND_PID
-        echo -e "${GREEN}✅ Backend parado (PID: $BACKEND_PID)${NC}"
-    else
-        echo -e "${YELLOW}⚠️  Backend não está rodando${NC}"
-    fi
-fi
-echo ""
+echo "2️⃣ Parando backend em microserviços..."
+stop_service "API Gateway" "/tmp/api-gateway.pid" 8080
+stop_service "Consulta Service" "/tmp/consulta-service.pid" 8082
+stop_service "Beneficiarios Service" "/tmp/beneficiarios-service.pid" 8081
+stop_service "Discovery Server" "/tmp/discovery-server.pid" 8761
 
-# Parar processos do Spring Boot
-echo "3️⃣ Verificando processos remanescentes..."
-SPRING_PIDS=$(pgrep -f "spring-boot:run")
-if [ ! -z "$SPRING_PIDS" ]; then
-    echo -e "${YELLOW}🔧 Parando processos Spring Boot...${NC}"
-    pkill -f "spring-boot:run"
-    echo -e "${GREEN}✅ Processos Spring Boot parados${NC}"
+echo "3️⃣ Verificando portas monitoradas..."
+if lsof -ti :8761,:8081,:8082,:8080,:3000 >/dev/null 2>&1; then
+    echo -e "${YELLOW}⚠️  Ainda existem processos ocupando portas do projeto. A verificação final indicará quais são.${NC}"
 else
-    echo -e "${GREEN}✅ Nenhum processo Spring Boot rodando${NC}"
-fi
-echo ""
-
-# Parar processos do React
-echo "4️⃣ Verificando processos React..."
-REACT_PIDS=$(pgrep -f "react-scripts")
-if [ ! -z "$REACT_PIDS" ]; then
-    echo -e "${YELLOW}🔧 Parando processos React...${NC}"
-    pkill -f "react-scripts"
-    echo -e "${GREEN}✅ Processos React parados${NC}"
-else
-    echo -e "${GREEN}✅ Nenhum processo React rodando${NC}"
+    echo -e "${GREEN}✅ Nenhum processo do projeto ficou ocupando as portas monitoradas${NC}"
 fi
 echo ""
 
 # Limpar logs
-echo "5️⃣ Limpando logs temporários..."
-if [ -f /tmp/backend.log ]; then
-    rm /tmp/backend.log
-    echo -e "${GREEN}✅ Log do backend removido${NC}"
-fi
-if [ -f /tmp/frontend.log ]; then
-    rm /tmp/frontend.log
-    echo -e "${GREEN}✅ Log do frontend removido${NC}"
-fi
+echo "4️⃣ Limpando logs temporários..."
+cleanup_log "Discovery Server" "/tmp/discovery-server.log"
+cleanup_log "Beneficiarios Service" "/tmp/beneficiarios-service.log"
+cleanup_log "Consulta Service" "/tmp/consulta-service.log"
+cleanup_log "API Gateway" "/tmp/api-gateway.log"
+cleanup_log "Frontend" "/tmp/frontend.log"
 echo ""
 
 # Verificação final
@@ -104,19 +99,13 @@ echo "🔍 Verificação Final"
 echo "=========================================="
 echo ""
 
-# Verificar porta 8080
-if lsof -Pi :8080 -sTCP:LISTEN -t >/dev/null ; then
-    echo -e "${RED}❌ Porta 8080 ainda está em uso${NC}"
-else
-    echo -e "${GREEN}✅ Porta 8080 liberada${NC}"
-fi
-
-# Verificar porta 3000
-if lsof -Pi :3000 -sTCP:LISTEN -t >/dev/null ; then
-    echo -e "${RED}❌ Porta 3000 ainda está em uso${NC}"
-else
-    echo -e "${GREEN}✅ Porta 3000 liberada${NC}"
-fi
+for port in 8761 8081 8082 8080 3000; do
+    if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null ; then
+        echo -e "${RED}❌ Porta $port ainda está em uso${NC}"
+    else
+        echo -e "${GREEN}✅ Porta $port liberada${NC}"
+    fi
+done
 
 echo ""
 echo "=========================================="

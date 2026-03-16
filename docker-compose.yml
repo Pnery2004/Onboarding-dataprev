@@ -1,0 +1,95 @@
+services:
+  postgres:
+    build:
+      context: ./backend
+      dockerfile: postgres/Dockerfile
+    container_name: gb-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-beneficiarios}
+      POSTGRES_USER: ${POSTGRES_USER:-myuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-myuser} -d ${POSTGRES_DB:-beneficiarios}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  discovery-server:
+    build:
+      context: ./backend
+      dockerfile: discovery-server/Dockerfile
+    container_name: gb-discovery-server
+    ports:
+      - "8761:8761"
+
+  beneficiarios-service:
+    build:
+      context: ./backend
+      dockerfile: beneficiarios-service/Dockerfile
+    container_name: gb-beneficiarios-service
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-beneficiarios}
+      DB_USERNAME: ${POSTGRES_USER:-myuser}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      EUREKA_SERVER_URL: http://discovery-server:8761/eureka
+    depends_on:
+      postgres:
+        condition: service_healthy
+      discovery-server:
+        condition: service_started
+    ports:
+      - "8081:8081"
+
+  consulta-service:
+    build:
+      context: ./backend
+      dockerfile: consulta-service/Dockerfile
+    container_name: gb-consulta-service
+    environment:
+      EUREKA_SERVER_URL: http://discovery-server:8761/eureka
+    depends_on:
+      discovery-server:
+        condition: service_started
+      beneficiarios-service:
+        condition: service_started
+    ports:
+      - "8082:8082"
+
+  api-gateway:
+    build:
+      context: ./backend
+      dockerfile: api-gateway/Dockerfile
+    container_name: gb-api-gateway
+    environment:
+      EUREKA_SERVER_URL: http://discovery-server:8761/eureka
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
+    depends_on:
+      discovery-server:
+        condition: service_started
+      beneficiarios-service:
+        condition: service_started
+      consulta-service:
+        condition: service_started
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build:
+      context: ./frontend/gestao-beneficiarios-frontend
+      dockerfile: Dockerfile
+    container_name: gb-frontend
+    depends_on:
+      api-gateway:
+        condition: service_started
+    ports:
+      - "3000:80"
+
+volumes:
+  postgres_data:
+

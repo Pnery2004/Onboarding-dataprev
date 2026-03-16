@@ -1,142 +1,207 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# Script de Inicialização do Sistema de Gestão de Beneficiários
-# Dataprev - Março 2026
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BACKEND_DIR="$ROOT_DIR/backend"
+FRONTEND_DIR="$ROOT_DIR/frontend/gestao-beneficiarios-frontend"
 
 echo "=========================================="
 echo "🚀 Sistema de Gestão de Beneficiários"
 echo "=========================================="
 echo ""
 
-# Cores para output
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+BLUE='\033[0;34m'
+NC='\033[0m'
 
-# Função para verificar se um serviço está rodando
-check_service() {
-    local port=$1
-    local service=$2
-
-    if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null ; then
-        echo -e "${GREEN}✅ $service está rodando na porta $port${NC}"
-        return 0
-    else
-        echo -e "${RED}❌ $service NÃO está rodando na porta $port${NC}"
-        return 1
-    fi
+info() {
+    echo -e "${BLUE}ℹ️  $*${NC}"
 }
 
-# Verificar PostgreSQL
+success() {
+    echo -e "${GREEN}✅ $*${NC}"
+}
+
+warn() {
+    echo -e "${YELLOW}⚠️  $*${NC}"
+}
+
+error() {
+    echo -e "${RED}❌ $*${NC}"
+}
+
+check_port() {
+    local port="$1"
+    lsof -Pi :"$port" -sTCP:LISTEN -t >/dev/null 2>&1
+}
+
+wait_for_port() {
+    local port="$1"
+    local service_name="$2"
+    local timeout="${3:-90}"
+    local log_file="${4:-}"
+
+    for ((i = 1; i <= timeout; i++)); do
+        if check_port "$port"; then
+            success "$service_name está rodando na porta $port"
+            return 0
+        fi
+
+        if (( i % 5 == 0 )); then
+            echo -n "."
+        fi
+
+        sleep 1
+    done
+
+    echo ""
+    error "Timeout ao iniciar $service_name"
+    if [ -n "$log_file" ] && [ -f "$log_file" ]; then
+        warn "Últimas linhas de $log_file:"
+        tail -n 20 "$log_file" || true
+    fi
+    return 1
+}
+
+start_backend_module() {
+    local module="$1"
+    local service_name="$2"
+    local port="$3"
+    local pid_file="$4"
+    local log_file="$5"
+
+    echo ""
+    echo "▶ $service_name"
+
+    if check_port "$port"; then
+        warn "$service_name já está rodando na porta $port. Pulando inicialização."
+        return 0
+    fi
+
+    rm -f "$pid_file" "$log_file"
+    info "Iniciando $service_name..."
+
+    (
+        cd "$BACKEND_DIR"
+        ./mvnw -pl "$module" spring-boot:run --no-transfer-progress > "$log_file" 2>&1
+    ) &
+
+    local pid=$!
+    echo "$pid" > "$pid_file"
+
+    info "Aguardando $service_name iniciar..."
+    wait_for_port "$port" "$service_name" 120 "$log_file"
+}
+
+start_frontend() {
+    local pid_file="/tmp/frontend.pid"
+    local log_file="/tmp/frontend.log"
+
+    echo ""
+    echo "▶ Frontend"
+
+    if check_port 3000; then
+        warn "Frontend já está rodando na porta 3000. Pulando inicialização."
+        return 0
+    fi
+
+    rm -f "$pid_file" "$log_file"
+
+    if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
+        info "node_modules não encontrado. Instalando dependências do frontend..."
+        (
+            cd "$FRONTEND_DIR"
+            npm install
+        )
+    fi
+
+    info "Iniciando frontend React..."
+    (
+        cd "$FRONTEND_DIR"
+        BROWSER=none npm start > "$log_file" 2>&1
+    ) &
+
+    local pid=$!
+    echo "$pid" > "$pid_file"
+
+    info "Aguardando frontend iniciar..."
+    wait_for_port 3000 "Frontend" 120 "$log_file"
+}
+
 echo "1️⃣ Verificando PostgreSQL..."
-if pgrep -x postgres >/dev/null ; then
-    echo -e "${GREEN}✅ PostgreSQL está rodando${NC}"
+if check_port 5432 || pgrep -x postgres >/dev/null 2>&1; then
+    success "PostgreSQL está disponível"
 else
-    echo -e "${YELLOW}⚠️  PostgreSQL não está rodando. Tentando iniciar...${NC}"
-    sudo systemctl start postgresql
-    sleep 2
-    if pgrep -x postgres >/dev/null ; then
-        echo -e "${GREEN}✅ PostgreSQL iniciado com sucesso${NC}"
+    warn "PostgreSQL não está rodando. Tentando iniciar..."
+    if command -v systemctl >/dev/null 2>&1; then
+        sudo systemctl start postgresql || true
+        sleep 3
+    fi
+
+    if check_port 5432 || pgrep -x postgres >/dev/null 2>&1; then
+        success "PostgreSQL iniciado com sucesso"
     else
-        echo -e "${RED}❌ Erro ao iniciar PostgreSQL${NC}"
+        error "PostgreSQL não está disponível. Configure o banco 'beneficiarios' antes de subir o sistema."
         exit 1
     fi
 fi
+
 echo ""
+echo "2️⃣ Iniciando backend em microserviços..."
+start_backend_module "discovery-server" "Discovery Server" 8761 "/tmp/discovery-server.pid" "/tmp/discovery-server.log"
+start_backend_module "beneficiarios-service" "Beneficiarios Service" 8081 "/tmp/beneficiarios-service.pid" "/tmp/beneficiarios-service.log"
+start_backend_module "consulta-service" "Consulta Service" 8082 "/tmp/consulta-service.pid" "/tmp/consulta-service.log"
+start_backend_module "api-gateway" "API Gateway" 8080 "/tmp/api-gateway.pid" "/tmp/api-gateway.log"
 
-# Verificar Backend
-echo "2️⃣ Verificando Backend (API REST)..."
-if check_service 8080 "Backend"; then
-    echo -e "${YELLOW}ℹ️  Backend já está rodando. Pulando inicialização.${NC}"
-else
-    echo -e "${YELLOW}🔧 Iniciando Backend...${NC}"
-    cd backend
-    ./mvnw spring-boot:run > /tmp/backend.log 2>&1 &
-    BACKEND_PID=$!
-
-    echo "⏳ Aguardando backend iniciar (pode levar até 60 segundos)..."
-
-    # Aguardar até 60 segundos
-    for i in {1..60}; do
-        sleep 1
-        if lsof -Pi :8080 -sTCP:LISTEN -t >/dev/null ; then
-            echo -e "${GREEN}✅ Backend iniciado com sucesso! (PID: $BACKEND_PID)${NC}"
-            echo $BACKEND_PID > /tmp/backend.pid
-            break
-        fi
-        if [ $i -eq 60 ]; then
-            echo -e "${RED}❌ Timeout ao iniciar backend. Verifique os logs em /tmp/backend.log${NC}"
-            exit 1
-        fi
+echo ""
+echo "3️⃣ Testando API via gateway (aguardando propagação do Eureka)..."
+API_OK=false
+for ((i = 1; i <= 60; i++)); do
+    if curl -fsS http://localhost:8080/api/v1/beneficiarios >/dev/null 2>&1; then
+        API_OK=true
+        break
+    fi
+    sleep 1
+    if (( i % 5 == 0 )); then
         echo -n "."
-    done
-    cd ..
-fi
+    fi
+done
 echo ""
 
-# Testar API
-echo "3️⃣ Testando API..."
-if curl -s http://localhost:8080/api/v1/beneficiarios > /dev/null; then
-    echo -e "${GREEN}✅ API respondendo corretamente${NC}"
-    BENEFICIARIOS_COUNT=$(curl -s http://localhost:8080/api/v1/beneficiarios | grep -o '"id"' | wc -l)
-    echo -e "${GREEN}ℹ️  $BENEFICIARIOS_COUNT beneficiário(s) cadastrado(s)${NC}"
+if $API_OK; then
+    BENEFICIARIOS_COUNT=$(curl -fsS http://localhost:8080/api/v1/beneficiarios | grep -o '"id"' | wc -l || true)
+    success "API Gateway respondendo corretamente"
+    info "$BENEFICIARIOS_COUNT beneficiário(s) retornado(s)"
 else
-    echo -e "${RED}❌ API não está respondendo${NC}"
+    error "API Gateway não respondeu após 60 segundos de espera"
+    warn "Consulte os logs em /tmp/api-gateway.log e /tmp/beneficiarios-service.log"
     exit 1
 fi
+
 echo ""
+echo "4️⃣ Iniciando frontend..."
+start_frontend
 
-# Verificar Frontend
-echo "4️⃣ Verificando Frontend (React)..."
-if check_service 3000 "Frontend"; then
-    echo -e "${YELLOW}ℹ️  Frontend já está rodando. Pulando inicialização.${NC}"
-else
-    echo -e "${YELLOW}🎨 Iniciando Frontend...${NC}"
-    cd frontend/gestao-beneficiarios-frontend
-
-    # Verificar se node_modules existe
-    if [ ! -d "node_modules" ]; then
-        echo -e "${YELLOW}📦 Instalando dependências do npm (primeira vez)...${NC}"
-        npm install
-    fi
-
-    npm start > /tmp/frontend.log 2>&1 &
-    FRONTEND_PID=$!
-
-    echo "⏳ Aguardando frontend iniciar (pode levar até 60 segundos)..."
-
-    # Aguardar até 30 segundos
-    for i in {1..60}; do
-        sleep 1
-        if lsof -Pi :3000 -sTCP:LISTEN -t >/dev/null ; then
-            echo -e "${GREEN}✅ Frontend iniciado com sucesso! (PID: $FRONTEND_PID)${NC}"
-            echo $FRONTEND_PID > /tmp/frontend.pid
-            break
-        fi
-        if [ $i -eq 60 ]; then
-            echo -e "${RED}❌ Timeout ao iniciar frontend. Verifique os logs em /tmp/frontend.log${NC}"
-            exit 1
-        fi
-        echo -n "."
-    done
-    cd ../..
-fi
 echo ""
-
-# Resumo
 echo "=========================================="
 echo "✅ Sistema iniciado com sucesso!"
 echo "=========================================="
 echo ""
 echo "📊 URLs Disponíveis:"
-echo "  • Frontend:  http://localhost:3000"
-echo "  • Backend:   http://localhost:8080"
-echo "  • Swagger:   http://localhost:8080/swagger-ui.html"
+echo "  • Frontend:          http://localhost:3000"
+echo "  • API Gateway:       http://localhost:8080"
+echo "  • Swagger Gateway:   http://localhost:8080/swagger-ui.html"
+echo "  • Eureka Dashboard:  http://localhost:8761"
 echo ""
 echo "📝 Logs:"
-echo "  • Backend:   /tmp/backend.log"
-echo "  • Frontend:  /tmp/frontend.log"
+echo "  • Discovery Server:       /tmp/discovery-server.log"
+echo "  • Beneficiarios Service:  /tmp/beneficiarios-service.log"
+echo "  • Consulta Service:       /tmp/consulta-service.log"
+echo "  • API Gateway:            /tmp/api-gateway.log"
+echo "  • Frontend:               /tmp/frontend.log"
 echo ""
 echo "🛑 Para parar os serviços, execute:"
 echo "  ./stop.sh"
@@ -144,14 +209,13 @@ echo ""
 echo "🎉 Acesse agora: http://localhost:3000"
 echo "=========================================="
 
-# Tentar abrir o navegador automaticamente
-if command -v xdg-open > /dev/null; then
+if command -v xdg-open >/dev/null 2>&1; then
     echo ""
-    echo "🌐 Abrindo navegador automaticamente..."
-    xdg-open http://localhost:3000 2>/dev/null &
-elif command -v open > /dev/null; then
+    info "Abrindo navegador automaticamente..."
+    xdg-open http://localhost:3000 >/dev/null 2>&1 &
+elif command -v open >/dev/null 2>&1; then
     echo ""
-    echo "🌐 Abrindo navegador automaticamente..."
-    open http://localhost:3000 2>/dev/null &
+    info "Abrindo navegador automaticamente..."
+    open http://localhost:3000 >/dev/null 2>&1 &
 fi
 
