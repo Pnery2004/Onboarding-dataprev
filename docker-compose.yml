@@ -25,6 +25,12 @@ services:
     container_name: gb-discovery-server
     ports:
       - "8761:8761"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
 
   beneficiarios-service:
     build:
@@ -42,9 +48,15 @@ services:
       postgres:
         condition: service_healthy
       discovery-server:
-        condition: service_started
+        condition: service_healthy
     ports:
       - "8081:8081"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
 
   consulta-service:
     build:
@@ -55,11 +67,17 @@ services:
       EUREKA_SERVER_URL: http://discovery-server:8761/eureka
     depends_on:
       discovery-server:
-        condition: service_started
+        condition: service_healthy
       beneficiarios-service:
-        condition: service_started
+        condition: service_healthy
     ports:
       - "8082:8082"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
 
   api-gateway:
     build:
@@ -71,13 +89,19 @@ services:
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
     depends_on:
       discovery-server:
-        condition: service_started
+        condition: service_healthy
       beneficiarios-service:
-        condition: service_started
+        condition: service_healthy
       consulta-service:
-        condition: service_started
+        condition: service_healthy
     ports:
       - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
 
   frontend:
     build:
@@ -86,10 +110,9 @@ services:
     container_name: gb-frontend
     depends_on:
       api-gateway:
-        condition: service_started
+        condition: service_healthy
     ports:
       - "3000:80"
 
 volumes:
   postgres_data:
-

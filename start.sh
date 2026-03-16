@@ -83,8 +83,7 @@ for ((i = 1; i <= TIMEOUT; i++)); do
         break
     fi
     if (( i % 15 == 0 )); then
-        info "Ainda aguardando... (${i}s / ${TIMEOUT}s)"
-        # Mostra logs do frontend para diagnóstico
+        info "Ainda aguardando frontend... (${i}s / ${TIMEOUT}s)"
         docker compose logs --tail=5 frontend 2>/dev/null || true
     fi
     sleep 1
@@ -93,8 +92,36 @@ done
 if $READY; then
     success "Frontend disponível em http://localhost:3000"
 else
-    warn "Frontend ainda não respondeu após ${TIMEOUT}s. Pode estar inicializando..."
+    warn "Frontend ainda não respondeu após ${TIMEOUT}s."
     warn "Verifique com: docker compose logs -f frontend"
+fi
+
+# ── 4b. Aguardar API Gateway estar pronta ────────────────────────────────────
+echo ""
+echo "4️⃣b Aguardando API Gateway e microserviços estarem prontos..."
+echo "   (Serviços Spring Boot levam ~30–90 s para inicializar)"
+
+API_TIMEOUT=180
+API_READY=false
+for ((i = 1; i <= API_TIMEOUT; i++)); do
+    STATUS=$(curl -fsS http://localhost:8080/actuator/health 2>/dev/null || true)
+    if echo "$STATUS" | grep -q '"status":"UP"'; then
+        API_READY=true
+        break
+    fi
+    if (( i % 20 == 0 )); then
+        info "Aguardando API Gateway... (${i}s / ${API_TIMEOUT}s)"
+        docker compose logs --tail=5 api-gateway 2>/dev/null || true
+    fi
+    sleep 1
+done
+
+if $API_READY; then
+    success "API Gateway pronta em http://localhost:8080"
+else
+    warn "API Gateway ainda não respondeu após ${API_TIMEOUT}s."
+    warn "Verifique com: docker compose logs -f api-gateway"
+    warn "O browser será aberto mesmo assim – a API pode ainda estar subindo."
 fi
 
 # ── 5. Abrir o navegador ──────────────────────────────────────────────────────
