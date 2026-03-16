@@ -2,42 +2,59 @@
 
 set -euo pipefail
 
-# Script de Verificação de Status dos Serviços
-# Sistema de Gestão de Beneficiários - Dataprev
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "=============================================="
-echo "🔍 Status do Sistema de Gestão de Beneficiários"
-echo "=============================================="
-echo ""
-
-# Cores
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-print_service_status() {
-    local label="$1"
-    local port="$2"
-    local url="${3:-}"
+info()    { echo -e "${BLUE}ℹ️  $*${NC}"; }
+success() { echo -e "${GREEN}✅ $*${NC}"; }
+warn()    { echo -e "${YELLOW}⚠️  $*${NC}"; }
+error()   { echo -e "${RED}❌ $*${NC}"; }
 
-    echo -e "${BLUE}$label${NC}"
-    if ss -tuln | grep -q ":$port .*LISTEN\|:$port\\b"; then
-        echo -e "   ${GREEN}✅ Status: RODANDO${NC}"
-        echo -e "   ${GREEN}✅ Porta: $port (LISTEN)${NC}"
+echo "=============================================="
+echo "🔍 Status do Sistema de Gestão de Beneficiários"
+echo "=============================================="
+echo ""
 
-        if [ -n "$url" ]; then
-            if curl -fsS "$url" >/dev/null 2>&1; then
-                echo -e "   ${GREEN}✅ Endpoint: Respondendo${NC}"
-            else
-                echo -e "   ${YELLOW}⚠️  Endpoint: Porta aberta, mas URL não respondeu${NC}"
-            fi
-        fi
-    else
-        echo -e "   ${RED}❌ Status: PARADO${NC}"
+run_docker_compose() {
+    if docker compose "$@" 2>/dev/null; then
+        return 0
     fi
-    echo ""
+
+    if command -v sg >/dev/null 2>&1; then
+        sg docker -c "docker compose $*"
+    else
+        return 1
+    fi
+}
+
+check_url() {
+    local label="$1"
+    local url="$2"
+    if curl -fsS "$url" >/dev/null 2>&1; then
+        success "$label respondendo"
+    else
+        warn "$label sem resposta no momento"
+    fi
+}
+
+is_port_listening() {
+    local port="$1"
+
+    if ss -tuln 2>/dev/null | grep -Eq "[.:]$port([[:space:]]|$)"; then
+        return 0
+    fi
+
+    if command -v lsof >/dev/null 2>&1; then
+        lsof -Pi :"$port" -sTCP:LISTEN -t >/dev/null 2>&1
+        return $?
+    fi
+
+    return 1
 }
 
 print_log_status() {
@@ -46,86 +63,75 @@ print_log_status() {
 
     if [ -f "$file" ]; then
         local size
-        size=$(du -h "$file" | cut -f1)
-        echo -e "   ${GREEN}• $label:${NC} $file ($size)"
+        size="$(du -h "$file" | cut -f1)"
+        echo -e "   ${GREEN}- $label:${NC} $file ($size)"
     else
-        echo -e "   ${YELLOW}• $label:${NC} $file (não encontrado)"
+        echo -e "   ${YELLOW}- $label:${NC} $file (nao encontrado)"
     fi
 }
 
-# Verificar PostgreSQL
-echo -e "${BLUE}1. PostgreSQL Database${NC}"
-if pgrep -x postgres >/dev/null ; then
-    echo -e "   ${GREEN}✅ Status: RODANDO${NC}"
-    if ss -tuln | grep -q ":5432.*LISTEN" ; then
-        echo -e "   ${GREEN}✅ Porta: 5432 (LISTEN)${NC}"
+cd "$ROOT_DIR"
+
+echo "1) Docker Compose"
+if docker info >/dev/null 2>&1 || sg docker -c "docker info" >/dev/null 2>&1; then
+    if run_docker_compose ps; then
+        success "Status listado via Docker Compose"
+    else
+        warn "Nao foi possivel consultar Docker Compose"
     fi
 else
-    echo -e "   ${RED}❌ Status: PARADO${NC}"
+    warn "Docker daemon indisponivel nesta sessao"
 fi
-echo ""
 
-print_service_status "2. Discovery Server (Eureka)" 8761 "http://localhost:8761"
-print_service_status "3. Beneficiarios Service" 8081 "http://localhost:8081/swagger-ui.html"
-print_service_status "4. Consulta Service" 8082 "http://localhost:8082/swagger-ui.html"
-print_service_status "5. API Gateway" 8080 "http://localhost:8080/api/v1/beneficiarios"
+echo ""
+echo "2) Healthcheck rapido de endpoints"
+check_url "Frontend" "http://localhost:3000"
+check_url "API Gateway" "http://localhost:8080/api/v1/beneficiarios"
+check_url "Eureka" "http://localhost:8761"
+check_url "Beneficiarios Service" "http://localhost:8081/actuator/health"
+check_url "Consulta Service" "http://localhost:8082/actuator/health"
 
 if curl -fsS http://localhost:8080/api/v1/beneficiarios >/dev/null 2>&1; then
-    BENEFICIARIOS=$(curl -fsS http://localhost:8080/api/v1/beneficiarios | grep -o '"id"' | wc -l || true)
-    echo -e "   ${GREEN}ℹ️  Beneficiários retornados pelo gateway: $BENEFICIARIOS${NC}"
-    CORS_HEADER=$(curl -s -D - http://localhost:8080/api/v1/beneficiarios -H "Origin: http://localhost:3000" -o /dev/null 2>&1 | grep -i "access-control-allow-origin" || true)
-    if [ -n "$CORS_HEADER" ]; then
-        echo -e "   ${GREEN}✅ CORS: Configurado para o frontend${NC}"
-    else
-        echo -e "   ${YELLOW}⚠️  CORS: Cabeçalho não retornado no teste${NC}"
-    fi
-    echo ""
+    beneficiarios_count="$(curl -fsS http://localhost:8080/api/v1/beneficiarios | grep -o '"id"' | wc -l || true)"
+    info "Beneficiarios retornados pelo gateway: ${beneficiarios_count}"
 fi
 
-# Verificar Frontend
-echo -e "${BLUE}6. Frontend (React)${NC}"
-if pgrep -f "react-scripts" >/dev/null ; then
-    echo -e "   ${GREEN}✅ Status: RODANDO${NC}"
-    if ss -tuln | grep -q ":3000.*LISTEN" ; then
-        echo -e "   ${GREEN}✅ Porta: 3000 (LISTEN)${NC}"
-    fi
-
-    # Testar Frontend
-    if curl -s http://localhost:3000 > /dev/null 2>&1; then
-        echo -e "   ${GREEN}✅ Servidor: Respondendo${NC}"
+echo ""
+echo "3) Fallback legado por portas"
+for entry in "Discovery Server:8761" "Beneficiarios Service:8081" "Consulta Service:8082" "API Gateway:8080" "Frontend:3000"; do
+    name="${entry%%:*}"
+    port="${entry##*:}"
+    if is_port_listening "$port"; then
+        success "$name ouvindo na porta $port"
     else
-        echo -e "   ${RED}⚠️  Servidor: Não está respondendo${NC}"
+        error "$name sem listener na porta $port"
     fi
-else
-    echo -e "   ${RED}❌ Status: PARADO${NC}"
-fi
-echo ""
+done
 
-# URLs
-echo -e "${BLUE}📊 URLs Disponíveis:${NC}"
-echo -e "   ${GREEN}• Frontend:${NC}     http://localhost:3000"
-echo -e "   ${GREEN}• API Gateway:${NC}  http://localhost:8080/api/v1/beneficiarios"
-echo -e "   ${GREEN}• Swagger:${NC}      http://localhost:8080/swagger-ui.html"
-echo -e "   ${GREEN}• Eureka:${NC}       http://localhost:8761"
-echo -e "   ${GREEN}• Teste CORS:${NC}   http://localhost:3000/teste-conexao.html"
 echo ""
+echo "4) URLs"
+echo "   - Frontend:        http://localhost:3000"
+echo "   - API Gateway:     http://localhost:8080"
+echo "   - Swagger Gateway: http://localhost:8080/swagger-ui.html"
+echo "   - Eureka:          http://localhost:8761"
+echo "   - PostgreSQL host: localhost:5433"
 
-# Logs
-echo -e "${BLUE}📝 Localização dos Logs:${NC}"
+echo ""
+echo "5) Logs"
 print_log_status "Discovery Server" "/tmp/discovery-server.log"
 print_log_status "Beneficiarios Service" "/tmp/beneficiarios-service.log"
 print_log_status "Consulta Service" "/tmp/consulta-service.log"
 print_log_status "API Gateway" "/tmp/api-gateway.log"
 print_log_status "Frontend" "/tmp/frontend.log"
-echo ""
 
-# Comandos úteis
-echo -e "${BLUE}🔧 Comandos Úteis:${NC}"
-echo -e "   ${GREEN}• Iniciar sistema:${NC}     ./start.sh"
-echo -e "   ${GREEN}• Parar sistema:${NC}       ./stop.sh"
-echo -e "   ${GREEN}• Ver log gateway:${NC}     tail -f /tmp/api-gateway.log"
-echo -e "   ${GREEN}• Ver log frontend:${NC}    tail -f /tmp/frontend.log"
-echo -e "   ${GREEN}• Testar API:${NC}          curl http://localhost:8080/api/v1/beneficiarios"
+echo ""
+echo "6) Comandos uteis"
+echo "   - Iniciar:           ./start.sh"
+echo "   - Parar:             ./stop.sh"
+echo "   - Status containers: docker compose ps"
+echo "   - Logs gerais:       docker compose logs -f"
+echo "   - Logs frontend:     docker compose logs -f frontend"
+
 echo ""
 
 echo "=============================================="

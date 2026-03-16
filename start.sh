@@ -3,219 +3,152 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKEND_DIR="$ROOT_DIR/backend"
-FRONTEND_DIR="$ROOT_DIR/frontend/gestao-beneficiarios-frontend"
 
-echo "=========================================="
-echo "🚀 Sistema de Gestão de Beneficiários"
-echo "=========================================="
-echo ""
-
+# ── Cores ──────────────────────────────────────────────────────────────────────
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 
-info() {
-    echo -e "${BLUE}ℹ️  $*${NC}"
-}
+info()    { echo -e "${BLUE}ℹ️  $*${NC}"; }
+success() { echo -e "${GREEN}✅ $*${NC}"; }
+warn()    { echo -e "${YELLOW}⚠️  $*${NC}"; }
+die()     { echo -e "${RED}❌ $*${NC}"; exit 1; }
 
-success() {
-    echo -e "${GREEN}✅ $*${NC}"
-}
+echo -e "${CYAN}"
+echo "  ╔══════════════════════════════════════════╗"
+echo "  ║   🚀 Gestão de Beneficiários             ║"
+echo "  ║      Iniciando ambiente Docker...        ║"
+echo "  ╚══════════════════════════════════════════╝"
+echo -e "${NC}"
 
-warn() {
-    echo -e "${YELLOW}⚠️  $*${NC}"
-}
+# ── 1. Garantir que o Docker está rodando ─────────────────────────────────────
+echo "1️⃣  Verificando Docker..."
 
-error() {
-    echo -e "${RED}❌ $*${NC}"
-}
+if ! docker info >/dev/null 2>&1; then
+    warn "Daemon do Docker não está ativo. Tentando iniciar..."
 
-check_port() {
-    local port="$1"
-    lsof -Pi :"$port" -sTCP:LISTEN -t >/dev/null 2>&1
-}
-
-wait_for_port() {
-    local port="$1"
-    local service_name="$2"
-    local timeout="${3:-90}"
-    local log_file="${4:-}"
-
-    for ((i = 1; i <= timeout; i++)); do
-        if check_port "$port"; then
-            success "$service_name está rodando na porta $port"
-            return 0
-        fi
-
-        if (( i % 5 == 0 )); then
-            echo -n "."
-        fi
-
-        sleep 1
-    done
-
-    echo ""
-    error "Timeout ao iniciar $service_name"
-    if [ -n "$log_file" ] && [ -f "$log_file" ]; then
-        warn "Últimas linhas de $log_file:"
-        tail -n 20 "$log_file" || true
-    fi
-    return 1
-}
-
-start_backend_module() {
-    local module="$1"
-    local service_name="$2"
-    local port="$3"
-    local pid_file="$4"
-    local log_file="$5"
-
-    echo ""
-    echo "▶ $service_name"
-
-    if check_port "$port"; then
-        warn "$service_name já está rodando na porta $port. Pulando inicialização."
-        return 0
-    fi
-
-    rm -f "$pid_file" "$log_file"
-    info "Iniciando $service_name..."
-
-    (
-        cd "$BACKEND_DIR"
-        ./mvnw -pl "$module" spring-boot:run --no-transfer-progress > "$log_file" 2>&1
-    ) &
-
-    local pid=$!
-    echo "$pid" > "$pid_file"
-
-    info "Aguardando $service_name iniciar..."
-    wait_for_port "$port" "$service_name" 120 "$log_file"
-}
-
-start_frontend() {
-    local pid_file="/tmp/frontend.pid"
-    local log_file="/tmp/frontend.log"
-
-    echo ""
-    echo "▶ Frontend"
-
-    if check_port 3000; then
-        warn "Frontend já está rodando na porta 3000. Pulando inicialização."
-        return 0
-    fi
-
-    rm -f "$pid_file" "$log_file"
-
-    if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
-        info "node_modules não encontrado. Instalando dependências do frontend..."
-        (
-            cd "$FRONTEND_DIR"
-            npm install
-        )
-    fi
-
-    info "Iniciando frontend React..."
-    (
-        cd "$FRONTEND_DIR"
-        BROWSER=none npm start > "$log_file" 2>&1
-    ) &
-
-    local pid=$!
-    echo "$pid" > "$pid_file"
-
-    info "Aguardando frontend iniciar..."
-    wait_for_port 3000 "Frontend" 120 "$log_file"
-}
-
-echo "1️⃣ Verificando PostgreSQL..."
-if check_port 5432 || pgrep -x postgres >/dev/null 2>&1; then
-    success "PostgreSQL está disponível"
-else
-    warn "PostgreSQL não está rodando. Tentando iniciar..."
-    if command -v systemctl >/dev/null 2>&1; then
-        sudo systemctl start postgresql || true
-        sleep 3
-    fi
-
-    if check_port 5432 || pgrep -x postgres >/dev/null 2>&1; then
-        success "PostgreSQL iniciado com sucesso"
+    # WSL2 com Docker nativo usa 'service'; systemd pode não estar disponível
+    if command -v systemctl >/dev/null 2>&1 \
+        && systemctl list-units --type=service 2>/dev/null | grep -q 'docker\.service'; then
+        sudo systemctl start docker
     else
-        error "PostgreSQL não está disponível. Configure o banco 'beneficiarios' antes de subir o sistema."
-        exit 1
+        sudo service docker start
     fi
+
+    echo -n "   Aguardando Docker iniciar"
+    for i in {1..15}; do
+        sleep 1; echo -n "."
+        docker info >/dev/null 2>&1 && break
+    done
+    echo ""
 fi
 
-echo ""
-echo "2️⃣ Iniciando backend em microserviços..."
-start_backend_module "discovery-server" "Discovery Server" 8761 "/tmp/discovery-server.pid" "/tmp/discovery-server.log"
-start_backend_module "beneficiarios-service" "Beneficiarios Service" 8081 "/tmp/beneficiarios-service.pid" "/tmp/beneficiarios-service.log"
-start_backend_module "consulta-service" "Consulta Service" 8082 "/tmp/consulta-service.pid" "/tmp/consulta-service.log"
-start_backend_module "api-gateway" "API Gateway" 8080 "/tmp/api-gateway.pid" "/tmp/api-gateway.log"
+docker info >/dev/null 2>&1 || die "Não foi possível iniciar o Docker. Verifique a instalação."
+success "Docker está rodando ($(docker --version | cut -d' ' -f3 | tr -d ','))"
 
+# ── 2. Subir os containers ────────────────────────────────────────────────────
 echo ""
-echo "3️⃣ Testando API via gateway (aguardando propagação do Eureka)..."
-API_OK=false
-for ((i = 1; i <= 60; i++)); do
-    if curl -fsS http://localhost:8080/api/v1/beneficiarios >/dev/null 2>&1; then
-        API_OK=true
+echo "2️⃣  Subindo todos os containers..."
+cd "$ROOT_DIR"
+
+# Usa 'sg docker' como fallback caso o grupo ainda não esteja ativo na sessão
+run_docker_compose() {
+    if docker compose "$@" 2>/dev/null; then
+        return 0
+    else
+        sg docker -c "docker compose $*"
+    fi
+}
+
+run_docker_compose up -d --build
+success "Containers iniciados com Docker Compose"
+
+# ── 3. Mostrar status dos containers ─────────────────────────────────────────
+echo ""
+echo "3️⃣  Status dos containers:"
+docker compose ps 2>/dev/null || sg docker -c "docker compose ps"
+
+# ── 4. Aguardar frontend estar acessível ─────────────────────────────────────
+echo ""
+echo "4️⃣  Aguardando o frontend ficar acessível em http://localhost:3000..."
+
+TIMEOUT=120
+READY=false
+for ((i = 1; i <= TIMEOUT; i++)); do
+    if curl -fsS http://localhost:3000 >/dev/null 2>&1; then
+        READY=true
         break
     fi
-    sleep 1
-    if (( i % 5 == 0 )); then
-        echo -n "."
+    if (( i % 15 == 0 )); then
+        info "Ainda aguardando... (${i}s / ${TIMEOUT}s)"
+        # Mostra logs do frontend para diagnóstico
+        docker compose logs --tail=5 frontend 2>/dev/null || true
     fi
+    sleep 1
 done
-echo ""
 
-if $API_OK; then
-    BENEFICIARIOS_COUNT=$(curl -fsS http://localhost:8080/api/v1/beneficiarios | grep -o '"id"' | wc -l || true)
-    success "API Gateway respondendo corretamente"
-    info "$BENEFICIARIOS_COUNT beneficiário(s) retornado(s)"
+if $READY; then
+    success "Frontend disponível em http://localhost:3000"
 else
-    error "API Gateway não respondeu após 60 segundos de espera"
-    warn "Consulte os logs em /tmp/api-gateway.log e /tmp/beneficiarios-service.log"
-    exit 1
+    warn "Frontend ainda não respondeu após ${TIMEOUT}s. Pode estar inicializando..."
+    warn "Verifique com: docker compose logs -f frontend"
 fi
 
+# ── 5. Abrir o navegador ──────────────────────────────────────────────────────
 echo ""
-echo "4️⃣ Iniciando frontend..."
-start_frontend
+echo "5️⃣  Abrindo o navegador..."
 
-echo ""
-echo "=========================================="
-echo "✅ Sistema iniciado com sucesso!"
-echo "=========================================="
-echo ""
-echo "📊 URLs Disponíveis:"
-echo "  • Frontend:          http://localhost:3000"
-echo "  • API Gateway:       http://localhost:8080"
-echo "  • Swagger Gateway:   http://localhost:8080/swagger-ui.html"
-echo "  • Eureka Dashboard:  http://localhost:8761"
-echo ""
-echo "📝 Logs:"
-echo "  • Discovery Server:       /tmp/discovery-server.log"
-echo "  • Beneficiarios Service:  /tmp/beneficiarios-service.log"
-echo "  • Consulta Service:       /tmp/consulta-service.log"
-echo "  • API Gateway:            /tmp/api-gateway.log"
-echo "  • Frontend:               /tmp/frontend.log"
-echo ""
-echo "🛑 Para parar os serviços, execute:"
-echo "  ./stop.sh"
-echo ""
-echo "🎉 Acesse agora: http://localhost:3000"
-echo "=========================================="
+FRONTEND_URL="http://localhost:3000"
 
-if command -v xdg-open >/dev/null 2>&1; then
-    echo ""
-    info "Abrindo navegador automaticamente..."
-    xdg-open http://localhost:3000 >/dev/null 2>&1 &
+# Detecta WSL2 → abre browser do Windows
+if grep -qi microsoft /proc/version 2>/dev/null || grep -qi wsl /proc/version 2>/dev/null; then
+    info "Ambiente WSL2 detectado → abrindo no browser do Windows"
+    if command -v wslview >/dev/null 2>&1; then
+        wslview "$FRONTEND_URL" &
+    elif [ -x "/mnt/c/Windows/System32/cmd.exe" ]; then
+        /mnt/c/Windows/System32/cmd.exe /c "start $FRONTEND_URL" >/dev/null 2>&1 &
+    elif [ -x "/mnt/c/Windows/explorer.exe" ]; then
+        /mnt/c/Windows/explorer.exe "$FRONTEND_URL" >/dev/null 2>&1 &
+    else
+        warn "Não foi possível abrir o navegador automaticamente."
+        info "Abra manualmente: $FRONTEND_URL"
+    fi
+# Linux desktop
+elif command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$FRONTEND_URL" >/dev/null 2>&1 &
+# macOS
 elif command -v open >/dev/null 2>&1; then
-    echo ""
-    info "Abrindo navegador automaticamente..."
-    open http://localhost:3000 >/dev/null 2>&1 &
+    open "$FRONTEND_URL" &
+else
+    warn "Navegador não detectado. Acesse manualmente: $FRONTEND_URL"
 fi
+
+# ── 6. Resumo final ───────────────────────────────────────────────────────────
+echo ""
+echo -e "${GREEN}"
+echo "  ╔══════════════════════════════════════════╗"
+echo "  ║   ✅ Sistema iniciado com sucesso!       ║"
+echo "  ╚══════════════════════════════════════════╝"
+echo -e "${NC}"
+echo "  📊 URLs Disponíveis:"
+echo "  ┌─────────────────────────────────────────────"
+echo "  │  🌐 Frontend:         http://localhost:3000"
+echo "  │  🔀 API Gateway:      http://localhost:8080"
+echo "  │  📡 Eureka Dashboard: http://localhost:8761"
+echo "  │  👤 Beneficiários:    http://localhost:8081"
+echo "  │  🔍 Consulta:         http://localhost:8082"
+echo "  │  🗄️  PostgreSQL:       localhost:5433"
+echo "  └─────────────────────────────────────────────"
+echo ""
+echo "  📋 Comandos úteis:"
+echo "    docker compose ps              → status"
+echo "    docker compose logs -f         → todos os logs"
+echo "    docker compose logs -f <nome>  → log de um serviço"
+echo ""
+echo "  🛑 Para parar tudo:  ./stop.sh"
+echo "  📊 Para ver status:  ./status.sh"
+echo ""
 
