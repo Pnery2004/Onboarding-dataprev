@@ -1,40 +1,38 @@
-# API de Gestão de Beneficiários
+# Gestão de Beneficiários
 
-API REST para gerenciamento de beneficiários da Dataprev, desenvolvida com Spring Boot 4.0.3, JPA/Hibernate e PostgreSQL, com frontend React integrado ao Design System GOV.BR.
+Plataforma para gerenciamento de beneficiários da Dataprev, desenvolvida com arquitetura de **microserviços Spring Cloud**, frontend React integrado ao Design System GOV.BR.
 
-## 📋 Características
+## Características
 
-- ✅ **API REST completa** com endpoints GET, POST, PUT e DELETE
-- ✅ **Entidade Beneficiario** com validações completas
-- ✅ **Persistência com JPA e PostgreSQL**
-- ✅ **Documentação interativa com Swagger/OpenAPI**
-- ✅ **Tratamento de exceções global**
-- ✅ **Validação de dados com Jakarta Validation**
-- ✅ **Auditoria com datas de criação/atualização**
-- ✅ **Frontend React com Design System GOV.BR**
+- **Arquitetura de microserviços** com Spring Cloud
+- **API Gateway** centraliza e roteia as requisições
+- **Service Discovery** com Netflix Eureka
+- **Comunicação entre serviços** via OpenFeign
+- **API REST completa** com endpoints GET, POST, PUT e DELETE
+- **Persistência com JPA e PostgreSQL**
+- **Documentação interativa com Swagger/OpenAPI**
+- **Frontend React com Design System GOV.BR**
 
-## 🛠️ Tecnologias
+## Tecnologias
 
 ### Backend
 - **Java 17**
-- **Spring Boot 4.0.3**
+- **Spring Boot 3.2.4**
+- **Spring Cloud 2023.0.1** (Gateway, Eureka, OpenFeign)
 - **Spring Data JPA / Hibernate**
-- **Spring Validation (Jakarta Bean Validation)**
-- **Spring AI 2.0.0-M2** (integração PostgresML Embedding)
-- **PostgreSQL 13+** (driver JDBC)
-- **Springdoc OpenAPI 2.1.0** (Swagger UI)
+- **PostgreSQL 13+**
+- **Springdoc OpenAPI 2.3.0** (Swagger UI)
 - **Lombok**
-- **Maven 3.8+** (via Maven Wrapper)
+- **Maven Wrapper**
 
 ### Frontend
 - **React 19**
 - **React Router DOM 7**
 - **Axios 1.x** — cliente HTTP para comunicação com a API
-- **Design System GOV.BR** (`@govbr-ds/core ^3.7.0` + `@govbr-ds/webcomponents`)
-- **CSS3** — Flexbox e Grid
+- **Design System GOV.BR** (`@govbr-ds/core ^3.7.0`)
 - **Node.js 18+**
 
-## 📦 Instalação
+## Instalação
 
 ### Pré-requisitos
 
@@ -52,43 +50,72 @@ cd Gestao-Beneficiarios
 
 ### 2. Baixar todas as dependências (Backend + Frontend)
 
-Execute o script de instalação na raiz do projeto:
-
 ```bash
 ./install.sh
 ```
 
-O script irá:
-- Verificar Java, Node.js e npm instalados
-- Baixar todas as dependências Maven do backend (`dependency:go-offline`)
-- Instalar todos os pacotes npm do frontend (`npm install`)
+O script verifica Java, Node.js e npm, baixa as dependências Maven de todos os módulos e instala os pacotes npm do frontend.
 
 ### 3. Configurar o banco de dados PostgreSQL
 
 ```bash
 sudo -u postgres psql << EOF
 CREATE USER myuser WITH PASSWORD 'secret';
-CREATE DATABASE mydatabase OWNER myuser;
-GRANT ALL PRIVILEGES ON DATABASE mydatabase TO myuser;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO myuser;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO myuser;
+CREATE DATABASE beneficiarios OWNER myuser;
+GRANT ALL PRIVILEGES ON DATABASE beneficiarios TO myuser;
 EOF
 ```
 
-#### Importar script SQL inicial (opcional)
+#### Importar dados de exemplo (opcional)
 
 ```bash
-PGPASSWORD='secret' psql -h localhost -U myuser -d mydatabase < backend/init-db.sql
+PGPASSWORD='secret' psql -h localhost -U myuser -d beneficiarios < backend/init-db.sql
 ```
 
-#### Criar arquivo `.pgpass` para conectar sem senha
+## Executando a aplicação
+
+### Executar com Docker (stack completa)
+
+Este repositório já possui Dockerfiles por serviço e um `docker-compose.yml` para subir todo o ambiente:
+
+- PostgreSQL
+- Discovery Server (Eureka)
+- Beneficiarios Service
+- Consulta Service
+- API Gateway
+- Frontend React (servido por Nginx)
+
+#### 1. (Opcional) criar `.env`
 
 ```bash
-echo "localhost:5432:mydatabase:myuser:secret" > ~/.pgpass
-chmod 600 ~/.pgpass
+cp .env.example .env
 ```
 
-## 🚀 Executando a aplicação
+#### 2. Subir todos os containers
+
+```bash
+docker compose up --build -d
+```
+
+#### 3. Ver logs
+
+```bash
+docker compose logs -f
+```
+
+#### 4. Parar ambiente
+
+```bash
+docker compose down
+```
+
+#### URLs no modo Docker
+
+| Serviço          | Endereço              |
+|------------------|-----------------------|
+| Frontend         | http://localhost:3000 |
+| API Gateway      | http://localhost:8080 |
+| Eureka Dashboard | http://localhost:8761 |
 
 ### Iniciar tudo de uma vez
 
@@ -96,52 +123,87 @@ chmod 600 ~/.pgpass
 ./start.sh
 ```
 
-### Iniciar manualmente
+O script sobe os serviços **na ordem correta**:
+1. Discovery Server (Eureka)
+2. Beneficiarios Service
+3. Consulta Service
+4. API Gateway
+5. Frontend React
 
-**Backend:**
+### Verificar status
+
 ```bash
-cd backend
-./mvnw spring-boot:run
+./status.sh
 ```
 
-**Frontend:**
+### Parar todos os serviços
+
 ```bash
-cd frontend/gestao-beneficiarios-frontend
+./stop.sh
+```
+
+### Iniciar serviços manualmente
+
+```bash
+cd backend
+
+# 1. Discovery Server
+./mvnw -pl discovery-server spring-boot:run &
+
+# 2. Beneficiarios Service
+./mvnw -pl beneficiarios-service spring-boot:run &
+
+# 3. Consulta Service
+./mvnw -pl consulta-service spring-boot:run &
+
+# 4. API Gateway
+./mvnw -pl api-gateway spring-boot:run &
+
+# 5. Frontend
+cd ../frontend/gestao-beneficiarios-frontend
 npm start
 ```
 
-| Serviço   | Endereço                              |
-|-----------|---------------------------------------|
-| Frontend  | http://localhost:3000                 |
-| API       | http://localhost:8080                 |
-| Swagger   | http://localhost:8080/swagger-ui.html |
+### URLs disponíveis
 
-## 🗂️ Estrutura do projeto
+| Serviço              | Endereço                              |
+|----------------------|---------------------------------------|
+| Frontend             | http://localhost:3000                 |
+| API Gateway          | http://localhost:8080                 |
+| Swagger (gateway)    | http://localhost:8080/swagger-ui.html |
+| Eureka Dashboard     | http://localhost:8761                 |
+| Beneficiarios direto | http://localhost:8081                 |
+| Consulta direto      | http://localhost:8082                 |
+
+## Estrutura do projeto
 
 ```
 Gestao-Beneficiarios/
 ├── install.sh                        # Baixa todas as dependências
-├── start.sh                          # Inicia backend + frontend
+├── start.sh                          # Inicia todos os serviços
 ├── stop.sh                           # Para todos os serviços
-├── status.sh                         # Verifica status dos serviços
+├── status.sh                         # Verifica status individual de cada serviço
 ├── backend/
-│   ├── src/
-│   │   ├── main/
-│   │   │   ├── java/com/example/Gestao_Beneficiarios/
-│   │   │   │   ├── config/           # Configurações (Swagger, CORS)
-│   │   │   │   ├── controller/       # Controllers REST
-│   │   │   │   ├── dto/              # Data Transfer Objects
-│   │   │   │   ├── exception/        # Exception handling global
-│   │   │   │   ├── model/            # Entidades JPA
-│   │   │   │   ├── repository/       # Repositories (DAO)
-│   │   │   │   ├── service/          # Lógica de negócio
-│   │   │   │   └── GestaoBeneficiariosApplication.java
-│   │   │   └── resources/
-│   │   │       └── application.properties
-│   │   └── test/
-│   ├── init-db.sql                   # Script de inicialização do BD
-│   ├── pom.xml                       # Dependências Maven
-│   └── mvnw                          # Maven Wrapper
+│   ├── pom.xml                       # Agregador Maven (packaging=pom)
+│   ├── mvnw                          # Maven Wrapper
+│   ├── init-db.sql                   # Script de criação e dados iniciais
+│   ├── discovery-server/             # Eureka Server (porta 8761)
+│   ├── api-gateway/                  # Spring Cloud Gateway (porta 8080)
+│   ├── beneficiarios-service/        # CRUD de beneficiários (porta 8081)
+│   │   └── src/main/java/.../
+│   │       ├── config/               # Swagger, CORS
+│   │       ├── controller/           # Endpoints REST
+│   │       ├── dto/                  # Request/Response DTOs
+│   │       ├── exception/            # Tratamento global de erros
+│   │       ├── model/                # Entidade JPA Beneficiario
+│   │       ├── repository/           # Spring Data Repository
+│   │       └── service/              # Regras de negócio
+│   └── consulta-service/             # Consultas via Feign (porta 8082)
+│       └── src/main/java/.../
+│           ├── client/               # BeneficiariosClient (OpenFeign)
+│           ├── controller/           # Endpoints de consulta
+│           ├── dto/                  # BeneficiarioView
+│           └── service/              # BeneficiarioConsultaService
 └── frontend/
     └── gestao-beneficiarios-frontend/
         ├── src/
@@ -149,27 +211,47 @@ Gestao-Beneficiarios/
         │   ├── pages/                # Home, Lista, Form, Detalhes
         │   ├── services/             # api.js, beneficiarioService.js
         │   └── utils/                # formatters.js
-        └── package.json              # Dependências npm
+        └── package.json
 ```
 
-## 🔧 Configuração
+## Configuração
 
-### application.properties
+### application.properties (beneficiarios-service)
 
 ```properties
-# Banco de dados
-spring.datasource.url=jdbc:postgresql://localhost:5432/mydatabase
+spring.application.name=beneficiarios-service
+server.port=8081
+
+spring.datasource.url=jdbc:postgresql://localhost:5432/beneficiarios
 spring.datasource.username=myuser
 spring.datasource.password=secret
 
-# JPA/Hibernate
 spring.jpa.hibernate.ddl-auto=update
 
-# Swagger
-springdoc.swagger-ui.path=/swagger-ui.html
+eureka.client.service-url.defaultZone=http://localhost:8761/eureka
 ```
 
-## 📊 Modelo de dados
+### application.yml (api-gateway)
+
+```yaml
+server:
+  port: 8080
+
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: beneficiarios-service
+          uri: lb://beneficiarios-service
+          predicates:
+            - Path=/api/v1/beneficiarios/**
+        - id: consulta-service
+          uri: lb://consulta-service
+          predicates:
+            - Path=/api/v1/consultas/**
+```
+
+## Modelo de dados
 
 ### Tabela: beneficiarios
 
@@ -183,41 +265,72 @@ springdoc.swagger-ui.path=/swagger-ui.html
 | data_criacao     | DATE         | DEFAULT NOW()     | Data de criação do registro      |
 | data_atualizacao | DATE         | DEFAULT NOW()     | Data da última atualização       |
 
-## 🎨 Frontend — Interface Web
+## Interface Web
 
-### Funcionalidades
+### Telas disponíveis
 
-| Tela                    | Rota                    | Descrição                                                 |
-|-------------------------|-------------------------|-----------------------------------------------------------|
-| Página Inicial          | `/`                     | Cards com acesso rápido às funcionalidades                |
-| Listagem                | `/beneficiarios`        | Tabela com filtro por nome/CPF e por situação             |
-| Cadastro                | `/novo`                 | Formulário com validação de CPF e campos obrigatórios     |
-| Edição                  | `/editar/:id`           | Formulário pré-preenchido (CPF somente leitura)           |
-| Detalhes                | `/beneficiario/:id`     | Visualização completa com badge de situação               |
+| Tela          | Rota                | Descrição                                             |
+|---------------|---------------------|-------------------------------------------------------|
+| Página Inicial | `/`                | Cards com acesso rápido às funcionalidades            |
+| Listagem      | `/beneficiarios`    | Tabela com filtro por nome/CPF e por situação         |
+| Cadastro      | `/novo`             | Formulário com validação de CPF                       |
+| Edição        | `/editar/:id`       | Formulário pré-preenchido (CPF somente leitura)       |
+| Detalhes      | `/beneficiario/:id` | Visualização completa com badge de situação           |
 
 ### Design System GOV.BR
 
-- **Cores oficiais**: Azul `#1351b4`, Azul escuro `#0c326f`
-- **Tipografia**: Fonte Rawline (padrão GOV.BR)
-- **Acessibilidade**: Contraste adequado e navegação por teclado
-- **Responsividade**: Mobile-first design
+- Cores oficiais: Azul `#1351b4`, Azul escuro `#0c326f`
+- Tipografia: Fonte Rawline (padrão GOV.BR)
 
-## 🧪 Testando o Sistema
+## Endpoints da API
 
-### Verificar status dos serviços
+Todas as requisições passam pelo **API Gateway** em `http://localhost:8080`.
 
-```bash
-./status.sh
-```
-
-### Endpoints da API
-
-| Método | Endpoint                   | Descrição                         |
-|--------|----------------------------|-----------------------------------|
-| GET    | `/beneficiarios`           | Listar todos os beneficiários     |
-| GET    | `/beneficiarios/{id}`      | Buscar beneficiário por ID        |
-| POST   | `/beneficiarios`           | Cadastrar novo beneficiário       |
-| PUT    | `/beneficiarios/{id}`      | Atualizar beneficiário            |
-| DELETE | `/beneficiarios/{id}`      | Deletar beneficiário              |
+| Método | Endpoint                          | Descrição                     |
+|--------|-----------------------------------|-------------------------------|
+| GET    | `/api/v1/beneficiarios`           | Listar todos                  |
+| GET    | `/api/v1/beneficiarios/{id}`      | Buscar por ID                 |
+| GET    | `/api/v1/beneficiarios/cpf/{cpf}` | Buscar por CPF                |
+| POST   | `/api/v1/beneficiarios`           | Cadastrar novo beneficiário   |
+| PUT    | `/api/v1/beneficiarios/{id}`      | Atualizar beneficiário        |
+| DELETE | `/api/v1/beneficiarios/{id}`      | Deletar beneficiário          |
 
 Documentação interativa: http://localhost:8080/swagger-ui.html
+
+## Logs
+
+| Serviço              | Arquivo de log                      |
+|----------------------|-------------------------------------|
+| Discovery Server     | `/tmp/discovery-server.log`         |
+| Beneficiarios Service| `/tmp/beneficiarios-service.log`    |
+| Consulta Service     | `/tmp/consulta-service.log`         |
+| API Gateway          | `/tmp/api-gateway.log`              |
+| Frontend             | `/tmp/frontend.log`                 |
+
+```bash
+# Acompanhar logs em tempo real
+tail -f /tmp/api-gateway.log
+tail -f /tmp/beneficiarios-service.log
+```
+
+## Testes
+
+### Executar testes do backend
+
+```bash
+cd backend
+./mvnw -pl beneficiarios-service test
+./mvnw -pl consulta-service test
+```
+
+### Testar a API via curl
+
+```bash
+# Listar beneficiários
+curl http://localhost:8080/api/v1/beneficiarios
+
+# Cadastrar
+curl -X POST http://localhost:8080/api/v1/beneficiarios \
+  -H "Content-Type: application/json" \
+  -d '{"nome":"João Silva","cpf":"12345678901","dataNascimento":"1990-01-15","situacao":"ATIVO"}'
+```

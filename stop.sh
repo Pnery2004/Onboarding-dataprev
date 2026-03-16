@@ -1,131 +1,119 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# Script de Parada do Sistema de Gestão de Beneficiários
-# Dataprev - Março 2026
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+info()    { echo -e "${BLUE}ℹ️  $*${NC}"; }
+success() { echo -e "${GREEN}✅ $*${NC}"; }
+warn()    { echo -e "${YELLOW}⚠️  $*${NC}"; }
+die()     { echo -e "${RED}❌ $*${NC}"; exit 1; }
 
 echo "=========================================="
 echo "🛑 Parando Sistema de Gestão de Beneficiários"
 echo "=========================================="
 echo ""
 
-# Cores para output
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
-
-# Parar Frontend
-echo "1️⃣ Parando Frontend..."
-if [ -f /tmp/frontend.pid ]; then
-    FRONTEND_PID=$(cat /tmp/frontend.pid)
-    if kill -0 $FRONTEND_PID 2>/dev/null; then
-        kill $FRONTEND_PID
-        echo -e "${GREEN}✅ Frontend parado (PID: $FRONTEND_PID)${NC}"
-        rm /tmp/frontend.pid
-    else
-        echo -e "${YELLOW}⚠️  Frontend já estava parado${NC}"
-        rm /tmp/frontend.pid
+run_docker_compose() {
+    if docker compose "$@" 2>/dev/null; then
+        return 0
     fi
-else
-    # Tentar parar pelo processo
-    FRONTEND_PID=$(lsof -ti :3000)
-    if [ ! -z "$FRONTEND_PID" ]; then
-        kill $FRONTEND_PID
-        echo -e "${GREEN}✅ Frontend parado (PID: $FRONTEND_PID)${NC}"
+
+    if command -v sg >/dev/null 2>&1; then
+        sg docker -c "docker compose $*"
     else
-        echo -e "${YELLOW}⚠️  Frontend não está rodando${NC}"
+        return 1
     fi
-fi
-echo ""
+}
 
-# Parar Backend
-echo "2️⃣ Parando Backend..."
-if [ -f /tmp/backend.pid ]; then
-    BACKEND_PID=$(cat /tmp/backend.pid)
-    if kill -0 $BACKEND_PID 2>/dev/null; then
-        kill $BACKEND_PID
-        echo -e "${GREEN}✅ Backend parado (PID: $BACKEND_PID)${NC}"
-        rm /tmp/backend.pid
+is_port_listening() {
+    local port="$1"
+    lsof -Pi :"$port" -sTCP:LISTEN -t >/dev/null 2>&1
+}
+
+stop_legacy_service() {
+    local service_name="$1"
+    local pid_file="$2"
+    local port="$3"
+
+    if [ -f "$pid_file" ]; then
+        local pid
+        pid="$(cat "$pid_file")"
+        if kill -0 "$pid" 2>/dev/null; then
+            pkill -P "$pid" 2>/dev/null || true
+            kill "$pid" 2>/dev/null || true
+            success "$service_name parado (PID: $pid)"
+        fi
+        rm -f "$pid_file"
+    fi
+
+    local pids
+    pids="$(lsof -ti :"$port" 2>/dev/null || true)"
+    if [ -n "$pids" ]; then
+        echo "$pids" | xargs kill 2>/dev/null || true
+        sleep 1
+        pids="$(lsof -ti :"$port" 2>/dev/null || true)"
+        if [ -n "$pids" ]; then
+            echo "$pids" | xargs kill -9 2>/dev/null || true
+        fi
+        success "$service_name: porta $port liberada"
+    fi
+}
+
+cleanup_log() {
+    local log_file="$1"
+    [ -f "$log_file" ] && rm -f "$log_file"
+}
+
+cd "$ROOT_DIR"
+
+echo "1️⃣ Parando containers Docker Compose..."
+if docker info >/dev/null 2>&1 || sg docker -c "docker info" >/dev/null 2>&1; then
+    run_docker_compose down --remove-orphans || die "Falha ao executar docker compose down"
+    success "Ambiente Docker parado"
+else
+    warn "Docker daemon indisponível nesta sessão. Pulando docker compose down."
+fi
+
+echo ""
+echo "2️⃣ Limpando processos legados (modo local Maven/React), se existirem..."
+stop_legacy_service "Frontend" "/tmp/frontend.pid" 3000
+stop_legacy_service "API Gateway" "/tmp/api-gateway.pid" 8080
+stop_legacy_service "Consulta Service" "/tmp/consulta-service.pid" 8082
+stop_legacy_service "Beneficiarios Service" "/tmp/beneficiarios-service.pid" 8081
+stop_legacy_service "Discovery Server" "/tmp/discovery-server.pid" 8761
+
+echo ""
+echo "3️⃣ Limpando logs temporários..."
+cleanup_log "/tmp/discovery-server.log"
+cleanup_log "/tmp/beneficiarios-service.log"
+cleanup_log "/tmp/consulta-service.log"
+cleanup_log "/tmp/api-gateway.log"
+cleanup_log "/tmp/frontend.log"
+success "Logs temporários removidos"
+
+echo ""
+echo "4️⃣ Verificação final de portas..."
+for port in 8761 8081 8082 8080 3000; do
+    if is_port_listening "$port"; then
+        warn "Porta $port ainda está em uso"
     else
-        echo -e "${YELLOW}⚠️  Backend já estava parado${NC}"
-        rm /tmp/backend.pid
+        success "Porta $port liberada"
     fi
-else
-    # Tentar parar pelo processo
-    BACKEND_PID=$(lsof -ti :8080)
-    if [ ! -z "$BACKEND_PID" ]; then
-        kill $BACKEND_PID
-        echo -e "${GREEN}✅ Backend parado (PID: $BACKEND_PID)${NC}"
-    else
-        echo -e "${YELLOW}⚠️  Backend não está rodando${NC}"
-    fi
-fi
-echo ""
-
-# Parar processos do Spring Boot
-echo "3️⃣ Verificando processos remanescentes..."
-SPRING_PIDS=$(pgrep -f "spring-boot:run")
-if [ ! -z "$SPRING_PIDS" ]; then
-    echo -e "${YELLOW}🔧 Parando processos Spring Boot...${NC}"
-    pkill -f "spring-boot:run"
-    echo -e "${GREEN}✅ Processos Spring Boot parados${NC}"
-else
-    echo -e "${GREEN}✅ Nenhum processo Spring Boot rodando${NC}"
-fi
-echo ""
-
-# Parar processos do React
-echo "4️⃣ Verificando processos React..."
-REACT_PIDS=$(pgrep -f "react-scripts")
-if [ ! -z "$REACT_PIDS" ]; then
-    echo -e "${YELLOW}🔧 Parando processos React...${NC}"
-    pkill -f "react-scripts"
-    echo -e "${GREEN}✅ Processos React parados${NC}"
-else
-    echo -e "${GREEN}✅ Nenhum processo React rodando${NC}"
-fi
-echo ""
-
-# Limpar logs
-echo "5️⃣ Limpando logs temporários..."
-if [ -f /tmp/backend.log ]; then
-    rm /tmp/backend.log
-    echo -e "${GREEN}✅ Log do backend removido${NC}"
-fi
-if [ -f /tmp/frontend.log ]; then
-    rm /tmp/frontend.log
-    echo -e "${GREEN}✅ Log do frontend removido${NC}"
-fi
-echo ""
-
-# Verificação final
-echo "=========================================="
-echo "🔍 Verificação Final"
-echo "=========================================="
-echo ""
-
-# Verificar porta 8080
-if lsof -Pi :8080 -sTCP:LISTEN -t >/dev/null ; then
-    echo -e "${RED}❌ Porta 8080 ainda está em uso${NC}"
-else
-    echo -e "${GREEN}✅ Porta 8080 liberada${NC}"
-fi
-
-# Verificar porta 3000
-if lsof -Pi :3000 -sTCP:LISTEN -t >/dev/null ; then
-    echo -e "${RED}❌ Porta 3000 ainda está em uso${NC}"
-else
-    echo -e "${GREEN}✅ Porta 3000 liberada${NC}"
-fi
+done
 
 echo ""
 echo "=========================================="
 echo "✅ Sistema parado com sucesso!"
 echo "=========================================="
 echo ""
-echo "ℹ️  PostgreSQL continua rodando em segundo plano"
+echo "ℹ️  Banco no container também foi parado (dados persistem no volume Docker)."
+echo "🚀 Para iniciar novamente, execute: ./start.sh"
 echo ""
-echo "🚀 Para iniciar novamente, execute:"
-echo "  ./start.sh"
-echo "=========================================="
 
