@@ -5,6 +5,9 @@ import Loading from '../components/Loading';
 import { formatarCpf, formatarData, formatarSituacao, corSituacao } from '../utils/formatters';
 import './ListaBeneficiarios.css';
 
+const MAX_RETRIES = 5;
+const RETRY_DELAY_MS = 4000;
+
 const ListaBeneficiarios = () => {
   const [beneficiarios, setBeneficiarios] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -15,19 +18,26 @@ const ListaBeneficiarios = () => {
 
   useEffect(() => {
     carregarBeneficiarios();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const carregarBeneficiarios = async () => {
+  const carregarBeneficiarios = async (tentativa = 0) => {
     try {
       setLoading(true);
       setError(null);
       const dados = await beneficiarioService.listarTodos();
       setBeneficiarios(dados);
-    } catch (err) {
-      setError('Erro ao carregar beneficiários. Verifique se a API está rodando.');
-      console.error(err);
-    } finally {
       setLoading(false);
+    } catch (err) {
+      console.error(`Tentativa ${tentativa + 1} falhou:`, err);
+      if (tentativa < MAX_RETRIES) {
+        const proxima = tentativa + 1;
+        setError(`Conectando à API... tentativa ${proxima} de ${MAX_RETRIES}`);
+        setTimeout(() => carregarBeneficiarios(proxima), RETRY_DELAY_MS);
+      } else {
+        setError('Erro ao carregar beneficiários. Verifique se a API está rodando.');
+        setLoading(false);
+      }
     }
   };
 
