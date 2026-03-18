@@ -1,0 +1,69 @@
+.gov-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(7, 20, 46, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 2000;
+}
+
+.gov-dialog {
+  width: 100%;
+  max-width: 560px;
+  background: #ffffff;
+  border-radius: 8px;
+  border: 1px solid #dbe3ec;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.24);
+  overflow: hidden;
+}
+
+.gov-dialog-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #dbe3ec;
+}
+
+.gov-dialog-header h2 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #071d41;
+}
+
+.gov-dialog-header-info {
+  background: #e8f0ff;
+}
+
+.gov-dialog-header-success {
+  background: #eaf6ec;
+}
+
+.gov-dialog-header-danger {
+  background: #ffe8e8;
+}
+
+.gov-dialog-body {
+  padding: 1.25rem;
+  color: #2b2b2b;
+  line-height: 1.45;
+}
+
+.gov-dialog-body p {
+  margin: 0;
+}
+
+.gov-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 0 1.25rem 1.25rem;
+}
+
+@media (max-width: 576px) {
+  .gov-dialog-footer {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+}
+

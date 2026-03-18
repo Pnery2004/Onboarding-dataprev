@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import beneficiarioService from '../services/beneficiarioService';
 import Loading from '../components/Loading';
+import GovDialog from '../components/GovDialog';
 import { formatarCpf, formatarData, formatarSituacao, corSituacao } from '../utils/formatters';
 import './DetalhesBeneficiario.css';
 
@@ -11,6 +12,8 @@ const DetalhesBeneficiario = () => {
   const [beneficiario, setBeneficiario] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showDeleteSuccess, setShowDeleteSuccess] = useState(false);
 
   useEffect(() => {
     carregarBeneficiario();
@@ -31,15 +34,14 @@ const DetalhesBeneficiario = () => {
   };
 
   const handleDeletar = async () => {
-    if (window.confirm(`Deseja realmente deletar o beneficiário ${beneficiario.nome}?`)) {
-      try {
-        await beneficiarioService.deletar(id);
-        alert('Beneficiário deletado com sucesso!');
-        navigate('/beneficiarios');
-      } catch (err) {
-        alert('Erro ao deletar beneficiário.');
-        console.error(err);
-      }
+    try {
+      await beneficiarioService.deletar(id);
+      setShowDeleteSuccess(true);
+    } catch (err) {
+      setError('Erro ao deletar beneficiário.');
+      console.error(err);
+    } finally {
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -126,13 +128,34 @@ const DetalhesBeneficiario = () => {
               <Link to={`/editar/${beneficiario.id}`} className="br-button primary">
                 Editar
               </Link>
-              <button onClick={handleDeletar} className="br-button danger">
+              <button onClick={() => setShowDeleteConfirm(true)} className="br-button danger">
                 Deletar
               </button>
             </div>
           </div>
         </div>
       </div>
+
+      <GovDialog
+        isOpen={showDeleteConfirm}
+        title="Confirmação de exclusão"
+        message={`Deseja realmente deletar o beneficiário ${beneficiario.nome}?`}
+        confirmLabel="Deletar"
+        cancelLabel="Cancelar"
+        variant="danger"
+        onConfirm={handleDeletar}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
+
+      <GovDialog
+        isOpen={showDeleteSuccess}
+        title="Beneficiário deletado"
+        message="Beneficiário deletado com sucesso!"
+        confirmLabel="Voltar para lista"
+        showCancel={false}
+        variant="success"
+        onConfirm={() => navigate('/beneficiarios')}
+      />
     </div>
   );
 };

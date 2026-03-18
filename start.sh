@@ -3,6 +3,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FORCE_FRONTEND_REBUILD="${FORCE_FRONTEND_REBUILD:-0}"
 
 # ── Cores ──────────────────────────────────────────────────────────────────────
 GREEN='\033[0;32m'
@@ -58,18 +59,31 @@ cd "$ROOT_DIR"
 run_docker_compose() {
     if docker compose "$@" 2>/dev/null; then
         return 0
-    else
+    elif command -v sg >/dev/null 2>&1; then
         sg docker -c "docker compose $*"
+    else
+        return 1
     fi
 }
 
-run_docker_compose up -d --build
+compose_logs_tail() {
+    local service="$1"
+    local lines="${2:-5}"
+    run_docker_compose logs --tail="$lines" "$service" || true
+}
+
+if [ "$FORCE_FRONTEND_REBUILD" = "1" ]; then
+    info "FORCE_FRONTEND_REBUILD=1 → rebuild do frontend sem cache"
+    run_docker_compose build --no-cache frontend || die "Falha no build sem cache do frontend"
+fi
+
+run_docker_compose up -d --build || die "Falha ao subir containers com Docker Compose"
 success "Containers iniciados com Docker Compose"
 
 # ── 3. Mostrar status dos containers ─────────────────────────────────────────
 echo ""
 echo "3️⃣  Status dos containers:"
-docker compose ps 2>/dev/null || sg docker -c "docker compose ps"
+run_docker_compose ps || die "Não foi possível listar o status dos containers"
 
 # ── 4. Aguardar frontend estar acessível ─────────────────────────────────────
 echo ""
@@ -84,7 +98,7 @@ for ((i = 1; i <= TIMEOUT; i++)); do
     fi
     if (( i % 15 == 0 )); then
         info "Ainda aguardando frontend... (${i}s / ${TIMEOUT}s)"
-        docker compose logs --tail=5 frontend 2>/dev/null || true
+        compose_logs_tail frontend 5
     fi
     sleep 1
 done
@@ -111,10 +125,36 @@ for ((i = 1; i <= API_TIMEOUT; i++)); do
     fi
     if (( i % 20 == 0 )); then
         info "Aguardando API Gateway... (${i}s / ${API_TIMEOUT}s)"
-        docker compose logs --tail=5 api-gateway 2>/dev/null || true
+        compose_logs_tail api-gateway 5
     fi
     sleep 1
 done
+
+# ── 4c. Verificar rota de beneficiários para evitar abrir frontend cedo demais ─
+echo ""
+echo "4️⃣c Validando endpoint de beneficiários..."
+
+BEN_TIMEOUT=120
+BEN_READY=false
+for ((i = 1; i <= BEN_TIMEOUT; i++)); do
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/beneficiarios || true)
+    if [ "$HTTP_CODE" = "200" ]; then
+        BEN_READY=true
+        break
+    fi
+    if (( i % 20 == 0 )); then
+        info "Aguardando endpoint /api/beneficiarios... (${i}s / ${BEN_TIMEOUT}s, HTTP ${HTTP_CODE:-000})"
+        compose_logs_tail beneficiarios-service 5
+    fi
+    sleep 1
+done
+
+if $BEN_READY; then
+    success "Endpoint de beneficiários respondeu 200"
+else
+    warn "Endpoint /api/beneficiarios não respondeu 200 após ${BEN_TIMEOUT}s."
+    warn "O frontend será aberto, mas pode exibir erro temporário até os serviços subirem."
+fi
 
 if $API_READY; then
     success "API Gateway pronta em http://localhost:8080"

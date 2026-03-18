@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import beneficiarioService from '../services/beneficiarioService';
 import Loading from '../components/Loading';
+import GovDialog from '../components/GovDialog';
 import { formatarCpf, formatarData, formatarSituacao, corSituacao } from '../utils/formatters';
 import './ListaBeneficiarios.css';
 
@@ -14,6 +15,8 @@ const ListaBeneficiarios = () => {
   const [error, setError] = useState(null);
   const [filtro, setFiltro] = useState('');
   const [filtroSituacao, setFiltroSituacao] = useState('TODOS');
+  const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, id: null, nome: '' });
+  const [showDeleteSuccess, setShowDeleteSuccess] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -41,16 +44,20 @@ const ListaBeneficiarios = () => {
     }
   };
 
-  const handleDeletar = async (id, nome) => {
-    if (window.confirm(`Deseja realmente deletar o beneficiário ${nome}?`)) {
-      try {
-        await beneficiarioService.deletar(id);
-        alert('Beneficiário deletado com sucesso!');
-        carregarBeneficiarios();
-      } catch (err) {
-        alert('Erro ao deletar beneficiário.');
-        console.error(err);
-      }
+  const handleDeletar = (id, nome) => {
+    setConfirmDelete({ isOpen: true, id, nome });
+  };
+
+  const confirmarDelecao = async () => {
+    try {
+      await beneficiarioService.deletar(confirmDelete.id);
+      setShowDeleteSuccess(true);
+      carregarBeneficiarios();
+    } catch (err) {
+      setError('Erro ao deletar beneficiário.');
+      console.error(err);
+    } finally {
+      setConfirmDelete({ isOpen: false, id: null, nome: '' });
     }
   };
 
@@ -185,6 +192,27 @@ const ListaBeneficiarios = () => {
           </div>
         )}
       </div>
+
+      <GovDialog
+        isOpen={confirmDelete.isOpen}
+        title="Confirmação de exclusão"
+        message={`Deseja realmente deletar o beneficiário ${confirmDelete.nome}?`}
+        confirmLabel="Deletar"
+        cancelLabel="Cancelar"
+        variant="danger"
+        onConfirm={confirmarDelecao}
+        onCancel={() => setConfirmDelete({ isOpen: false, id: null, nome: '' })}
+      />
+
+      <GovDialog
+        isOpen={showDeleteSuccess}
+        title="Beneficiário deletado"
+        message="Beneficiário deletado com sucesso!"
+        confirmLabel="Fechar"
+        showCancel={false}
+        variant="success"
+        onConfirm={() => setShowDeleteSuccess(false)}
+      />
     </div>
   );
 };

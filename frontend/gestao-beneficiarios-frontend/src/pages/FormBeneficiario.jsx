@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import beneficiarioService from '../services/beneficiarioService';
 import Loading from '../components/Loading';
+import GovDialog from '../components/GovDialog';
 import { limparCpf, validarCpf, formatarCpf } from '../utils/formatters';
 import './FormBeneficiario.css';
 
@@ -13,6 +14,13 @@ const FormBeneficiario = () => {
   const [loading, setLoading] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [errors, setErrors] = useState({});
+  const [dialogState, setDialogState] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    variant: 'info',
+    onConfirmNavigate: false,
+  });
 
   const [formData, setFormData] = useState({
     nome: '',
@@ -38,9 +46,14 @@ const FormBeneficiario = () => {
         situacao: dados.situacao,
       });
     } catch (err) {
-      alert('Erro ao carregar beneficiário.');
+      setDialogState({
+        isOpen: true,
+        title: 'Falha ao carregar',
+        message: 'Erro ao carregar beneficiário.',
+        variant: 'danger',
+        onConfirmNavigate: true,
+      });
       console.error(err);
-      navigate('/beneficiarios');
     } finally {
       setLoading(false);
     }
@@ -114,18 +127,37 @@ const FormBeneficiario = () => {
 
       if (isEdicao) {
         await beneficiarioService.atualizar(id, formData);
-        alert('Beneficiário atualizado com sucesso!');
+        setDialogState({
+          isOpen: true,
+          title: 'Beneficiário atualizado',
+          message: 'Dados atualizados com sucesso.',
+          variant: 'success',
+          onConfirmNavigate: true,
+        });
       } else {
         await beneficiarioService.criar(formData);
-        alert('Beneficiário cadastrado com sucesso!');
+        setDialogState({
+          isOpen: true,
+          title: 'Beneficiário cadastrado',
+          message: 'Novo beneficiário adicionado com sucesso no sistema.',
+          variant: 'success',
+          onConfirmNavigate: true,
+        });
       }
-
-      navigate('/beneficiarios');
     } catch (err) {
+      const mensagemErro = err.response?.data?.message
+        ? `Erro: ${err.response.data.message}`
+        : 'Erro ao salvar beneficiário. Verifique se a API está rodando.';
+
+      setDialogState({
+        isOpen: true,
+        title: 'Falha ao salvar',
+        message: mensagemErro,
+        variant: 'danger',
+        onConfirmNavigate: false,
+      });
       if (err.response?.data?.message) {
-        alert(`Erro: ${err.response.data.message}`);
-      } else {
-        alert('Erro ao salvar beneficiário. Verifique se a API está rodando.');
+        setErrors((prev) => ({ ...prev, form: err.response.data.message }));
       }
       console.error(err);
     } finally {
@@ -238,6 +270,29 @@ const FormBeneficiario = () => {
           </form>
         </div>
       </div>
+
+      <GovDialog
+        isOpen={dialogState.isOpen}
+        title={dialogState.title}
+        message={dialogState.message}
+        confirmLabel={dialogState.onConfirmNavigate ? 'Ir para lista' : 'Fechar'}
+        showCancel={false}
+        variant={dialogState.variant}
+        onConfirm={() => {
+          const shouldNavigate = dialogState.onConfirmNavigate;
+          setDialogState({
+            isOpen: false,
+            title: '',
+            message: '',
+            variant: 'info',
+            onConfirmNavigate: false,
+          });
+
+          if (shouldNavigate) {
+            navigate('/beneficiarios');
+          }
+        }}
+      />
     </div>
   );
 };
