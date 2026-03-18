@@ -24,6 +24,31 @@ spring:
           uri: lb://consulta-service
           predicates:
             - Path=/api/v1/consultas/**
+        - id: beneficiarios-openapi
+          uri: lb://beneficiarios-service
+          predicates:
+            - Path=/api-docs/beneficiarios
+          filters:
+            - SetPath=/api-docs
+        - id: consulta-openapi
+          uri: lb://consulta-service
+          predicates:
+            - Path=/api-docs/consulta
+          filters:
+            - SetPath=/api-docs
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    disable-swagger-default-url: true
+    urls:
+      - name: Beneficiarios Service
+        url: /api-docs/beneficiarios
+      - name: Consulta Service
+        url: /api-docs/consulta
 
 eureka:
   client:

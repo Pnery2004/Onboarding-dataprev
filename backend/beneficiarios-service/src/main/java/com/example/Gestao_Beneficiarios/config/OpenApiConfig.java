@@ -29,11 +29,11 @@ public class OpenApiConfig {
                                 .url("https://www.apache.org/licenses/LICENSE-2.0.html")))
                 .servers(List.of(
                         new Server()
-                                .url("http://localhost:8080")
-                                .description("Servidor Local"),
+                                .url("http://localhost:8081")
+                                .description("Beneficiarios Service - acesso direto"),
                         new Server()
-                                .url("https://api.example.com")
-                                .description("Servidor de Produção")));
+                                .url("http://localhost:8080")
+                                .description("API Gateway - entrada recomendada")));
     }
 }
 
