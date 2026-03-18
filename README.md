@@ -87,9 +87,7 @@ Este repositório já possui Dockerfiles por serviço e um `docker-compose.yml` 
 
 #### 1. (Opcional) criar `.env`
 
-```bash
-cp .env.example .env
-```
+Se você quiser sobrescrever variáveis padrão do `docker-compose.yml`, crie um arquivo `.env` manualmente na raiz do projeto.
 
 #### 2. Subir todos os containers
 
@@ -282,6 +280,20 @@ spring:
 - Cores oficiais: Azul `#1351b4`, Azul escuro `#0c326f`
 - Tipografia: Fonte Rawline (padrão GOV.BR)
 
+### Screenshots
+
+#### Tela inicial (onboarding)
+
+![Tela inicial onboarding](Imagens/Tela%20inicial%20onboarding.png)
+
+#### Novo cadastro
+
+![Novo cadastro](Imagens/Novo%20cadastro.png)
+
+#### Dashboard de beneficiários
+
+![Dashboard de beneficiarios](Imagens/Dashboard%20befeiciarios.png)
+
 ## Endpoints da API
 
 Todas as requisições passam pelo **API Gateway** em `http://localhost:8080`.
@@ -295,7 +307,38 @@ Todas as requisições passam pelo **API Gateway** em `http://localhost:8080`.
 | PUT    | `/api/v1/beneficiarios/{id}`      | Atualizar beneficiário        |
 | DELETE | `/api/v1/beneficiarios/{id}`      | Deletar beneficiário          |
 
-Documentação interativa: http://localhost:8080/swagger-ui.html
+## Documentação da API (Swagger/OpenAPI)
+
+A documentação é gerada com **Springdoc OpenAPI** e publicada no **Swagger UI**.
+
+### Portal unificado (recomendado)
+
+Use o Swagger do gateway para navegar em todas as APIs de negócio em um único lugar:
+
+- Swagger UI (Gateway): `http://localhost:8080/swagger-ui.html`
+- OpenAPI JSON (Beneficiarios via gateway): `http://localhost:8080/api-docs/beneficiarios`
+- OpenAPI JSON (Consulta via gateway): `http://localhost:8080/api-docs/consulta`
+
+### Documentação por serviço (acesso direto)
+
+| Serviço               | Swagger UI                          | OpenAPI JSON                      |
+|-----------------------|-------------------------------------|-----------------------------------|
+| Beneficiarios Service | `http://localhost:8081/swagger-ui.html` | `http://localhost:8081/api-docs` |
+| Consulta Service      | `http://localhost:8082/swagger-ui.html` | `http://localhost:8082/api-docs` |
+
+### Escopo da documentação
+
+- `beneficiarios-service`: operações completas de CRUD (`GET`, `POST`, `PUT`, `DELETE`) para beneficiários.
+- `consulta-service`: operações de consulta (`listar`, `buscar por id`, `buscar por cpf`) via integração remota.
+- `api-gateway`: centraliza o acesso e agrega os documentos OpenAPI dos serviços de negócio.
+- `discovery-server`: não expõe endpoints de negócio para consumo externo.
+
+### Validar rapidamente se a documentação está disponível
+
+```bash
+curl -s http://localhost:8080/api-docs/beneficiarios | head -n 5
+curl -s http://localhost:8080/api-docs/consulta | head -n 5
+```
 
 ## Logs
 
